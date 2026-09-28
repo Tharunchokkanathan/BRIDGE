@@ -15,7 +15,22 @@ async function initApp() {
     setupEventListeners();
     await loadModelMetadata();
     await loadDashboardStats();
+    await loadDatabaseStatus();
     await loadShipments();
+}
+
+async function loadDatabaseStatus() {
+    try {
+        const res = await fetch('/api/database/status');
+        const dbInfo = await res.json();
+        const badge = document.getElementById('db-backend-name');
+        if (badge) {
+            badge.textContent = dbInfo.is_supabase_connected ? 'DB: Supabase Cloud' : 'DB: SQLite / Supabase Ready';
+            badge.title = `${dbInfo.backend} | Shipments Stored: ${dbInfo.shipments_stored} | Interventions Logged: ${dbInfo.interventions_logged}`;
+        }
+    } catch (err) {
+        console.error("Error loading database status:", err);
+    }
 }
 
 function setupTabNavigation() {
