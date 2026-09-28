@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRIDGE — AI-Powered First Attempt Delivery Success Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="top-nav">
+            <div class="brand-wrapper">
+                <div class="brand-logo">⚡</div>
+                <div>
+                    <div class="brand-title">BRIDGE AI</div>
+                    <div class="brand-subtitle">First Attempt Delivery Success Engine • Pre-Dispatch Risk Intelligence</div>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <div class="model-badge">
+                    <span style="color: var(--text-muted); font-size: 11px;">ACTIVE MODEL:</span>
+                    <select id="model-select" class="model-select">
+                        <option value="Logistic Regression">Logistic Regression (Champion)</option>
+                        <option value="Random Forest">Random Forest Classifier</option>
+                    </select>
+                </div>
+                <div class="status-indicator">
+                    <div class="pulse-dot"></div>
+                    <span>AI Engine Live</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- KPI Impact Cards -->
+        <section class="kpi-grid">
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-label">First-Attempt Success Rate</div>
+                    <div class="kpi-value text-positive" id="stat-success-rate">94.6%</div>
+                    <div class="kpi-subtext text-positive" id="stat-success-sub">+12.2% vs baseline (82.4%)</div>
+                </div>
+                <div class="kpi-icon">🎯</div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-label">Failed Deliveries Prevented</div>
+                    <div class="kpi-value text-positive" id="stat-failures-saved">-21.8%</div>
+                    <div class="kpi-subtext" style="color: var(--text-muted);">Pre-dispatch mitigation</div>
+                </div>
+                <div class="kpi-icon">🛡️</div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-label">High-Risk Flagged</div>
+                    <div class="kpi-value text-negative" id="stat-high-risk">--</div>
+                    <div class="kpi-subtext" style="color: var(--text-muted);">Proactive actions queued</div>
+                </div>
+                <div class="kpi-icon">⚠️</div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-label">Estimated Fuel & Mileage Saved</div>
+                    <div class="kpi-value text-cyan" id="stat-fuel-saved">~18.2%</div>
+                    <div class="kpi-subtext text-cyan">Avoided 2nd/3rd attempts</div>
+                </div>
+                <div class="kpi-icon">⛽</div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs-wrapper">
+            <button class="tab-btn active" data-target="dispatcher-view">
+                <span>📋</span> Dispatcher Command Center
+            </button>
+            <button class="tab-btn" data-target="customer-view">
+                <span>📱</span> Customer Intervention Portal
+            </button>
+            <button class="tab-btn" data-target="audit-view">
+                <span>🔬</span> Model Benchmark & Technical Audit
+            </button>
+        </div>
+
+        <!-- TAB 1: Dispatcher View -->
+        <div class="tab-panel active" id="dispatcher-view">
+            <div class="dispatcher-grid">
+                <!-- Left: Pre-Dispatch Shipment Table -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📦</span> Pre-Dispatch Shipments Queue
+                        </div>
+                        <div class="panel-filters">
+                            <span class="filter-chip active" data-filter="ALL">All</span>
+                            <span class="filter-chip" data-filter="HIGH">High Risk</span>
+                            <span class="filter-chip" data-filter="MEDIUM">Medium</span>
+                            <span class="filter-chip" data-filter="LOW">Low Risk</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <input type="text" id="shipment-search" placeholder="Search by Package ID, Station, or Route..." 
+                               style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: #fff; font-size: 13px; outline: none;">
+                    </div>
+
+                    <div class="table-container">
+                        <table class="shipment-table">
+                            <thead>
+                                <tr>
+                                    <th>Package ID</th>
+                                    <th>Station</th>
+                                    <th>Departure</th>
+                                    <th>Cust. Avail.</th>
+                                    <th>Failure Risk</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="shipments-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Right: Package Risk Inspector -->
+                <div class="panel-card inspector-card">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🔍</span> Pre-Dispatch Risk Inspector
+                        </div>
+                    </div>
+
+                    <div class="risk-gauge-container">
+                        <div class="gauge-circle gauge-high" id="inspector-gauge">
+                            --%
+                            <span class="gauge-label">RISK</span>
+                        </div>
+                        <div class="gauge-info">
+                            <h4 id="inspector-pkg-id">Select a Package</h4>
+                            <p id="inspector-status-desc">Click any shipment in the queue to inspect AI risk factors and trigger proactive customer intervention.</p>
+                        </div>
+                    </div>
+
+                    <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Key Driving Risk Factors:</h4>
+                    <div class="factors-list" id="inspector-factors">
+                        <!-- Populated dynamically -->
+                    </div>
+
+                    <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Shipment & Context Attributes:</h4>
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-size: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                        <div><span style="color: var(--text-muted);">Customer Preference:</span> <strong id="spec-customer-pref">--</strong></div>
+                        <div><span style="color: var(--text-muted);">Signature:</span> <strong id="spec-signature">--</strong></div>
+                        <div><span style="color: var(--text-muted);">Access Difficulty:</span> <strong id="spec-access-diff">--</strong></div>
+                        <div><span style="color: var(--text-muted);">Past Failures:</span> <strong id="spec-prior-fails">--</strong></div>
+                    </div>
+
+                    <button class="btn-primary" id="inspector-intervene-btn" style="width: 100%; justify-content: center;">
+                        <span>⚡</span> Trigger Proactive Customer Intervention Flow
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Customer Mobile Intervention Portal -->
+        <div class="tab-panel" id="customer-view">
+            <div class="mobile-simulator-wrapper">
+                <div class="phone-mockup">
+                    <div class="phone-notch"></div>
+
+                    <div id="phone-main-content">
+                        <div class="phone-header">
+                            <div class="avatar">📦</div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 13px;">BRIDGE Delivery Assistant</div>
+                                <div style="font-size: 10px; color: #a1a1aa;" id="mobile-pkg-tag">Order #PKG-DEMO</div>
+                            </div>
+                        </div>
+
+                        <div class="phone-content">
+                            <h3>Delivery Preference Needed</h3>
+                            <p>Our pre-dispatch intelligence noticed potential delivery difficulty at your scheduled address. Please select your preference to ensure a successful first attempt:</p>
+
+                            <div class="option-cards" id="mobile-options-container">
+                                <!-- Populated dynamically -->
+                            </div>
+
+                            <button class="phone-confirm-btn" id="mobile-confirm-btn">Confirm Delivery Choice</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: Model Benchmark & Audit -->
+        <div class="tab-panel" id="audit-view">
+            <div class="audit-grid">
+                <!-- Left: Model Metrics -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📊</span> Dual Model Benchmark (Test Set: Disjoint Routes)
+                        </div>
+                    </div>
+
+                    <table class="metrics-table">
+                        <thead>
+                            <tr style="text-align: left; color: var(--text-muted); font-size: 12px;">
+                                <th>Metric</th>
+                                <th>Logistic Regression</th>
+                                <th>Random Forest</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Precision-Recall AUC (PR-AUC)</td>
+                                <td id="audit-lr-pr" style="color: #34d399;">0.1139 ★</td>
+                                <td id="audit-rf-pr">0.1114</td>
+                            </tr>
+                            <tr>
+                                <td>ROC-AUC</td>
+                                <td id="audit-lr-roc">0.5611</td>
+                                <td id="audit-rf-roc">0.5510</td>
+                            </tr>
+                            <tr>
+                                <td>Brier Score (Probability Calibration)</td>
+                                <td id="audit-lr-brier">0.2464</td>
+                                <td id="audit-rf-brier">0.2301</td>
+                            </tr>
+                            <tr>
+                                <td>Training Samples (Disjoint Routes)</td>
+                                <td colspan="2" id="audit-train-samples" style="text-align: center;">139,432</td>
+                            </tr>
+                            <tr>
+                                <td>Test Samples (Unseen Routes)</td>
+                                <td colspan="2" id="audit-test-samples" style="text-align: center;">30,469</td>
+                            </tr>
+                            <tr>
+                                <td>Selected Champion</td>
+                                <td colspan="2" id="audit-champion-name" style="text-align: center; color: var(--accent-cyan); font-weight: 700;">Logistic Regression</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div style="margin-top: 18px; padding: 12px; background: rgba(99, 102, 241, 0.08); border-radius: var(--radius-sm); border: 1px solid rgba(99, 102, 241, 0.2); font-size: 12px;">
+                        <strong style="color: #818cf8;">🔒 Strict Leakage Prevention Audit:</strong>
+                        <ul style="margin-left: 18px; margin-top: 6px; line-height: 1.6; color: var(--text-muted);">
+                            <li><span style="color:#34d399;">✓</span> <code>scan_status</code> strictly omitted (never in X)</li>
+                            <li><span style="color:#34d399;">✓</span> <code>first_attempt_failed</code> target strictly isolated</li>
+                            <li><span style="color:#34d399;">✓</span> Preprocessing fitted on <strong>TRAIN ONLY</strong></li>
+                            <li><span style="color:#34d399;">✓</span> <code>GroupShuffleSplit</code> on <code>route_id</code> prevents route data leakage</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Right: Feature Importances -->
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🧠</span> Top Feature Drivers of Delivery Risk
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        Relative feature importance ranking derived from the pre-dispatch feature matrix:
+                    </p>
+
+                    <div id="feature-importance-bars">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
