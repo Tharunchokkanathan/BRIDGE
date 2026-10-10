@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 # Load .env file automatically
@@ -88,7 +88,7 @@ class DatabaseManager:
 
     def save_shipment(self, data: Dict[str, Any]):
         """Persists a pre-dispatch shipment record."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         pred = data.get("prediction", {})
         
         record = {
@@ -146,7 +146,7 @@ class DatabaseManager:
 
     def record_intervention(self, package_id: str, intervention: Dict[str, Any]):
         """Persists a customer's selected delivery preference."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         interv_rec = {
             "package_id": package_id,
             "intervention_id": intervention.get("id", "custom"),
@@ -202,7 +202,7 @@ class DatabaseManager:
             "shipments_stored": shipments_count,
             "interventions_logged": interventions_count,
             "status": "ONLINE",
-            "last_synced": datetime.utcnow().isoformat()
+            "last_synced": datetime.now(timezone.utc).isoformat()
         }
 
 # Singleton instance

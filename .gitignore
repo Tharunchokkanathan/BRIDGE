@@ -52,15 +52,17 @@ yarn-error.log*
 # Datasets (never commit full raw or processed datasets to public repo)
 *.xlsx
 data/raw/*
+!data/raw/.gitkeep
 data/*.csv
 !data/sample_test_deliveries.csv
 data/processed/*.csv
 data/processed/*.parquet
 !data/processed/.gitkeep
 
-# Models & Weights (never commit large serialized artifacts to git)
+# Models & Weights (never commit large serialized binaries to git)
 models/*
 !models/.gitkeep
+!models/model_metadata.json
 
 # Serialization binaries
 *.pkl

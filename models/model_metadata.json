@@ -1,0 +1,197 @@
+{
+  "champion_model": "Random Forest",
+  "selection_metric": "PR-AUC (Precision-Recall AUC)",
+  "train_rows": 69505,
+  "val_rows": 15044,
+  "test_rows": 15451,
+  "feature_count": 63,
+  "feature_names": [
+    "latitude",
+    "longitude",
+    "planned_service_time_seconds",
+    "depth_cm",
+    "height_cm",
+    "width_cm",
+    "package_volume_cm3",
+    "departure_hour",
+    "is_weekend",
+    "month",
+    "time_window_duration_hours",
+    "customer_availability_rate",
+    "customer_previous_delivery_attempts",
+    "customer_previous_failed_attempts",
+    "customer_previous_success_rate",
+    "address_access_difficulty",
+    "signature_required",
+    "historical_zone_failure_rate",
+    "historical_station_failure_rate",
+    "seasonal_failure_rate",
+    "traffic_risk_score",
+    "weather_risk_score",
+    "has_time_window",
+    "window_start_minutes",
+    "window_end_minutes",
+    "departure_to_window_start_minutes",
+    "departure_to_window_end_minutes",
+    "departure_hour_sin",
+    "departure_hour_cos",
+    "day_of_week_sin",
+    "day_of_week_cos",
+    "log_package_volume",
+    "log_planned_service_time",
+    "preference_departure_mismatch",
+    "station_code_DAU1",
+    "station_code_DBO1",
+    "station_code_DBO2",
+    "station_code_DBO3",
+    "station_code_DCH1",
+    "station_code_DCH2",
+    "station_code_DCH3",
+    "station_code_DCH4",
+    "station_code_DLA3",
+    "station_code_DLA4",
+    "station_code_DLA5",
+    "station_code_DLA7",
+    "station_code_DLA8",
+    "station_code_DLA9",
+    "station_code_DSE2",
+    "station_code_DSE4",
+    "station_code_DSE5",
+    "preferred_delivery_method_Front Door",
+    "preferred_delivery_method_Garage",
+    "preferred_delivery_method_Hand to Customer",
+    "preferred_delivery_method_Locker",
+    "preferred_delivery_method_Mailroom",
+    "preferred_delivery_method_Neighbor",
+    "preferred_delivery_method_Porch",
+    "customer_delivery_preference_Anytime",
+    "customer_delivery_preference_Evening Only",
+    "customer_delivery_preference_Leave with Guard",
+    "customer_delivery_preference_Morning Only",
+    "customer_delivery_preference_Weekday Only"
+  ],
+  "top_features": {
+    "customer_availability_rate": 0.0856,
+    "traffic_risk_score": 0.0522,
+    "weather_risk_score": 0.0513,
+    "longitude": 0.0508,
+    "historical_zone_failure_rate": 0.0503,
+    "latitude": 0.0484,
+    "seasonal_failure_rate": 0.0474,
+    "planned_service_time_seconds": 0.0472,
+    "log_planned_service_time": 0.0468,
+    "package_volume_cm3": 0.0379,
+    "depth_cm": 0.0367,
+    "log_package_volume": 0.0365,
+    "width_cm": 0.0346,
+    "height_cm": 0.0341,
+    "customer_previous_delivery_attempts": 0.0331,
+    "address_access_difficulty": 0.0282,
+    "customer_previous_success_rate": 0.0254,
+    "customer_delivery_preference_Morning Only": 0.0176,
+    "day_of_week_sin": 0.0163,
+    "historical_station_failure_rate": 0.0161
+  },
+  "comparison_results": {
+    "Logistic Regression": {
+      "training_time_sec": 2.24,
+      "validation_metrics": {
+        "dataset": "Validation",
+        "roc_auc": 0.5639,
+        "pr_auc": 0.1129,
+        "brier_score": 0.0819,
+        "mean_predicted_prob": 0.0934,
+        "precision_at_015": 0.1353,
+        "recall_at_015": 0.0338,
+        "f1_at_015": 0.0541,
+        "precision_at_010": 0.1132,
+        "recall_at_010": 0.3919,
+        "f1_at_010": 0.1756,
+        "confusion_matrix_015": [
+          [
+            13390,
+            294
+          ],
+          [
+            1314,
+            46
+          ]
+        ]
+      },
+      "test_metrics": {
+        "dataset": "Test",
+        "roc_auc": 0.5568,
+        "pr_auc": 0.113,
+        "brier_score": 0.0825,
+        "mean_predicted_prob": 0.0926,
+        "precision_at_015": 0.1688,
+        "recall_at_015": 0.0384,
+        "f1_at_015": 0.0625,
+        "precision_at_010": 0.1094,
+        "recall_at_010": 0.3596,
+        "f1_at_010": 0.1678,
+        "confusion_matrix_015": [
+          [
+            13778,
+            266
+          ],
+          [
+            1353,
+            54
+          ]
+        ]
+      }
+    },
+    "Random Forest": {
+      "training_time_sec": 13.01,
+      "validation_metrics": {
+        "dataset": "Validation",
+        "roc_auc": 0.5406,
+        "pr_auc": 0.1067,
+        "brier_score": 0.0821,
+        "mean_predicted_prob": 0.0919,
+        "precision_at_015": 0.0,
+        "recall_at_015": 0.0,
+        "f1_at_015": 0.0,
+        "precision_at_010": 0.1173,
+        "recall_at_010": 0.2103,
+        "f1_at_010": 0.1506,
+        "confusion_matrix_015": [
+          [
+            13684,
+            0
+          ],
+          [
+            1360,
+            0
+          ]
+        ]
+      },
+      "test_metrics": {
+        "dataset": "Test",
+        "roc_auc": 0.5514,
+        "pr_auc": 0.1137,
+        "brier_score": 0.0826,
+        "mean_predicted_prob": 0.0919,
+        "precision_at_015": 0.0,
+        "recall_at_015": 0.0,
+        "f1_at_015": 0.0,
+        "precision_at_010": 0.1262,
+        "recall_at_010": 0.2168,
+        "f1_at_010": 0.1596,
+        "confusion_matrix_015": [
+          [
+            14044,
+            0
+          ],
+          [
+            1407,
+            0
+          ]
+        ]
+      }
+    }
+  },
+  "calibrated": true,
+  "trained_at": "2026-10-10 11:34:42"
+}
