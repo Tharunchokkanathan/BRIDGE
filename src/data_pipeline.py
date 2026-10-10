@@ -8,78 +8,23 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# Target variable
+# Import authoritative feature sets from feature_engineering
+from feature_engineering import (
+    CATEGORICAL_FEATURES,
+    NUMERICAL_FEATURES,
+    ALL_FEATURE_COLS,
+    EXCLUDE_COLS,
+    compute_engineered_features,
+    verify_feature_integrity
+)
+
 TARGET_COL = "first_attempt_failed"
 
-# Explicit non-model / leakage columns to exclude from training
-EXCLUDE_COLS = [
-    "route_id",
-    "stop_id",
-    "package_id",
-    "first_attempt_failed",
-    "scan_status",
-    "delivery_date",
-    "departure_time",
-    "day_of_week",
-    "stop_type",
-    "time_window_start",
-    "time_window_end",
-    "zone_id",
-]
-
-# Categorical features for OneHotEncoding
-CATEGORICAL_FEATURES = [
-    "station_code",
-    "preferred_delivery_method",
-    "customer_delivery_preference",
-]
-
-# 34 Numerical features
-NUMERICAL_FEATURES = [
-    "latitude",
-    "longitude",
-    "planned_service_time_seconds",
-    "depth_cm",
-    "height_cm",
-    "width_cm",
-    "package_volume_cm3",
-    "departure_hour",
-    "is_weekend",
-    "month",
-    "time_window_duration_hours",
-    "customer_availability_rate",
-    "customer_previous_delivery_attempts",
-    "customer_previous_failed_attempts",
-    "customer_previous_success_rate",
-    "address_access_difficulty",
-    "signature_required",
-    "historical_zone_failure_rate",
-    "historical_station_failure_rate",
-    "seasonal_failure_rate",
-    "traffic_risk_score",
-    "weather_risk_score",
-    "has_time_window",
-    "window_start_minutes",
-    "window_end_minutes",
-    "departure_to_window_start_minutes",
-    "departure_to_window_end_minutes",
-    "departure_hour_sin",
-    "departure_hour_cos",
-    "day_of_week_sin",
-    "day_of_week_cos",
-    "log_package_volume",
-    "log_planned_service_time",
-    "preference_departure_mismatch",
-]
-
-ALL_FEATURE_COLS = CATEGORICAL_FEATURES + NUMERICAL_FEATURES
 
 def verify_no_leakage(df_cols):
     """Explicitly audits feature names against leakage and outcome rules."""
-    forbidden = ["scan_status", "first_attempt_failed"]
-    for col in forbidden:
-        assert col not in df_cols, f"[CRITICAL LEAKAGE DETECTED] {col} is in feature matrix!"
-    print("[LEAKAGE AUDIT PASSED] No outcome or target variables in feature matrix.")
+    return verify_feature_integrity(df_cols)
+
 
 def load_and_split_data(csv_path="data/amazon_delivery_ml_features_sample.csv", test_size=0.15, val_size=0.15, random_state=42):
     """
@@ -92,6 +37,9 @@ def load_and_split_data(csv_path="data/amazon_delivery_ml_features_sample.csv", 
     
     # Verify target exists
     assert TARGET_COL in df.columns, f"{TARGET_COL} not found in columns!"
+    
+    # Ensure all engineered features are present
+    df = compute_engineered_features(df)
     
     # Feature columns
     feature_cols = [c for c in df.columns if c in ALL_FEATURE_COLS]
@@ -123,6 +71,7 @@ def load_and_split_data(csv_path="data/amazon_delivery_ml_features_sample.csv", 
     print(f"Train set: {len(X_train):,} rows ({len(np.unique(groups[train_val_idx][train_idx])):,} distinct routes) | Failure rate: {y_train.mean():.3%}")
     print(f"Val set:   {len(X_val):,} rows ({len(np.unique(groups[train_val_idx][val_idx])):,} distinct routes) | Failure rate: {y_val.mean():.3%}")
     print(f"Test set:  {len(X_test):,} rows ({len(np.unique(groups[test_idx])):,} distinct routes) | Failure rate: {y_test.mean():.3%}")
+    print(f"Candidate Features count: {len(feature_cols)} ({len(CATEGORICAL_FEATURES)} Categorical + {len(NUMERICAL_FEATURES)} Numerical)")
     
     return {
         "X_train": X_train, "y_train": y_train,
@@ -131,6 +80,7 @@ def load_and_split_data(csv_path="data/amazon_delivery_ml_features_sample.csv", 
         "test_meta": test_meta,
         "feature_cols": feature_cols
     }
+
 
 def build_preprocessor(cat_features=CATEGORICAL_FEATURES, num_features=NUMERICAL_FEATURES, scale_numeric=False):
     """
@@ -155,6 +105,7 @@ def build_preprocessor(cat_features=CATEGORICAL_FEATURES, num_features=NUMERICAL
         remainder="drop"
     )
     return preprocessor
+
 
 if __name__ == "__main__":
     if os.path.exists("data/amazon_delivery_ml_features_sample.csv"):

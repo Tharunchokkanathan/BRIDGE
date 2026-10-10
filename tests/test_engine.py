@@ -114,5 +114,34 @@ class TestBridgeProductionEngine(unittest.TestCase):
         lr_res = self.engine.predict_risk(self.sample_record)
         self.assertIsNotNone(lr_res)
 
+    def test_44_feature_contract(self):
+        """Verifies the 44-feature contract covering all 8 Problem Statement pillars."""
+        self.assertEqual(len(ALL_FEATURE_COLS), 44, f"Expected exactly 44 features, got {len(ALL_FEATURE_COLS)}")
+        expected_sample_features = [
+            "location_type",
+            "risk_signature_unavailability",
+            "risk_commercial_closed",
+            "risk_preference_departure_clash",
+            "risk_access_difficulty_heavy_package",
+            "customer_failure_propensity"
+        ]
+        for f in expected_sample_features:
+            self.assertIn(f, ALL_FEATURE_COLS, f"Feature {f} missing from ALL_FEATURE_COLS")
+
+    def test_operational_interaction_features(self):
+        """Tests that commercial after-hours and signature absence interactions calculate correctly."""
+        from feature_engineering import compute_engineered_features
+        commercial_rec = {
+            "preferred_delivery_method": "Mailroom",
+            "location_type": "Commercial",
+            "departure_hour": 18, # After 5 PM
+            "is_weekend": 0,
+            "signature_required": 1,
+            "customer_availability_rate": 0.20
+        }
+        df = compute_engineered_features(pd.DataFrame([commercial_rec]))
+        self.assertEqual(df.loc[0, "risk_commercial_closed"], 1.0, "Commercial address after 17:00 must flag risk_commercial_closed")
+        self.assertAlmostEqual(df.loc[0, "risk_signature_unavailability"], 0.80, places=2)
+
 if __name__ == "__main__":
     unittest.main()

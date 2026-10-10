@@ -1,10 +1,10 @@
 {
-  "champion_model": "Random Forest",
+  "champion_model": "Logistic Regression",
   "selection_metric": "PR-AUC (Precision-Recall AUC)",
   "train_rows": 69505,
   "val_rows": 15044,
   "test_rows": 15451,
-  "feature_count": 63,
+  "feature_count": 73,
   "feature_names": [
     "latitude",
     "longitude",
@@ -40,6 +40,12 @@
     "log_package_volume",
     "log_planned_service_time",
     "preference_departure_mismatch",
+    "risk_signature_unavailability",
+    "risk_preference_departure_clash",
+    "risk_commercial_closed",
+    "risk_access_difficulty_heavy_package",
+    "risk_zone_weather_stress",
+    "customer_failure_propensity",
     "station_code_DAU1",
     "station_code_DBO1",
     "station_code_DBO2",
@@ -68,94 +74,98 @@
     "customer_delivery_preference_Evening Only",
     "customer_delivery_preference_Leave with Guard",
     "customer_delivery_preference_Morning Only",
-    "customer_delivery_preference_Weekday Only"
+    "customer_delivery_preference_Weekday Only",
+    "location_type_Apartment",
+    "location_type_Commercial",
+    "location_type_Locker_Hub",
+    "location_type_Residential"
   ],
   "top_features": {
-    "customer_availability_rate": 0.0856,
-    "traffic_risk_score": 0.0522,
-    "weather_risk_score": 0.0513,
-    "longitude": 0.0508,
-    "historical_zone_failure_rate": 0.0503,
-    "latitude": 0.0484,
-    "seasonal_failure_rate": 0.0474,
-    "planned_service_time_seconds": 0.0472,
-    "log_planned_service_time": 0.0468,
-    "package_volume_cm3": 0.0379,
-    "depth_cm": 0.0367,
-    "log_package_volume": 0.0365,
-    "width_cm": 0.0346,
-    "height_cm": 0.0341,
-    "customer_previous_delivery_attempts": 0.0331,
-    "address_access_difficulty": 0.0282,
-    "customer_previous_success_rate": 0.0254,
-    "customer_delivery_preference_Morning Only": 0.0176,
-    "day_of_week_sin": 0.0163,
-    "historical_station_failure_rate": 0.0161
+    "customer_availability_rate": 0.0685,
+    "risk_access_difficulty_heavy_package": 0.0497,
+    "weather_risk_score": 0.0445,
+    "traffic_risk_score": 0.044,
+    "latitude": 0.0424,
+    "longitude": 0.0422,
+    "historical_zone_failure_rate": 0.0422,
+    "risk_zone_weather_stress": 0.042,
+    "seasonal_failure_rate": 0.0416,
+    "log_planned_service_time": 0.0401,
+    "planned_service_time_seconds": 0.0371,
+    "risk_preference_departure_clash": 0.031,
+    "log_package_volume": 0.0308,
+    "depth_cm": 0.0304,
+    "customer_failure_propensity": 0.0303,
+    "package_volume_cm3": 0.0296,
+    "width_cm": 0.0294,
+    "height_cm": 0.0269,
+    "customer_previous_delivery_attempts": 0.0248,
+    "customer_previous_success_rate": 0.0222
   },
   "comparison_results": {
     "Logistic Regression": {
-      "training_time_sec": 2.24,
+      "training_time_sec": 3.43,
       "validation_metrics": {
         "dataset": "Validation",
-        "roc_auc": 0.5639,
-        "pr_auc": 0.1129,
-        "brier_score": 0.0819,
-        "mean_predicted_prob": 0.0934,
-        "precision_at_015": 0.1353,
-        "recall_at_015": 0.0338,
-        "f1_at_015": 0.0541,
-        "precision_at_010": 0.1132,
-        "recall_at_010": 0.3919,
-        "f1_at_010": 0.1756,
+        "roc_auc": 0.5676,
+        "pr_auc": 0.1145,
+        "brier_score": 0.0818,
+        "mean_predicted_prob": 0.0933,
+        "precision_at_015": 0.1607,
+        "recall_at_015": 0.0397,
+        "f1_at_015": 0.0637,
+        "precision_at_010": 0.1137,
+        "recall_at_010": 0.386,
+        "f1_at_010": 0.1757,
         "confusion_matrix_015": [
           [
-            13390,
-            294
+            13402,
+            282
           ],
           [
-            1314,
-            46
+            1306,
+            54
           ]
         ]
       },
       "test_metrics": {
         "dataset": "Test",
-        "roc_auc": 0.5568,
-        "pr_auc": 0.113,
+        "roc_auc": 0.5549,
+        "pr_auc": 0.1124,
         "brier_score": 0.0825,
-        "mean_predicted_prob": 0.0926,
-        "precision_at_015": 0.1688,
-        "recall_at_015": 0.0384,
-        "f1_at_015": 0.0625,
-        "precision_at_010": 0.1094,
-        "recall_at_010": 0.3596,
-        "f1_at_010": 0.1678,
+        "mean_predicted_prob": 0.0925,
+        "precision_at_015": 0.1677,
+        "recall_at_015": 0.0398,
+        "f1_at_015": 0.0643,
+        "precision_at_010": 0.1106,
+        "recall_at_010": 0.3547,
+        "f1_at_010": 0.1686,
         "confusion_matrix_015": [
           [
-            13778,
-            266
+            13766,
+            278
           ],
           [
-            1353,
-            54
+            1351,
+            56
           ]
         ]
       }
     },
     "Random Forest": {
-      "training_time_sec": 13.01,
+      "training_time_sec": 21.56,
       "validation_metrics": {
         "dataset": "Validation",
         "roc_auc": 0.5406,
-        "pr_auc": 0.1067,
+        "pr_auc": 0.1055,
         "brier_score": 0.0821,
         "mean_predicted_prob": 0.0919,
         "precision_at_015": 0.0,
         "recall_at_015": 0.0,
         "f1_at_015": 0.0,
-        "precision_at_010": 0.1173,
-        "recall_at_010": 0.2103,
-        "f1_at_010": 0.1506,
+        "precision_at_010": 0.1118,
+        "recall_at_010": 0.2206,
+        "f1_at_010": 0.1484,
         "confusion_matrix_015": [
           [
             13684,
@@ -169,16 +179,16 @@
       },
       "test_metrics": {
         "dataset": "Test",
-        "roc_auc": 0.5514,
-        "pr_auc": 0.1137,
+        "roc_auc": 0.5484,
+        "pr_auc": 0.1108,
         "brier_score": 0.0826,
         "mean_predicted_prob": 0.0919,
         "precision_at_015": 0.0,
         "recall_at_015": 0.0,
         "f1_at_015": 0.0,
-        "precision_at_010": 0.1262,
-        "recall_at_010": 0.2168,
-        "f1_at_010": 0.1596,
+        "precision_at_010": 0.1215,
+        "recall_at_010": 0.2239,
+        "f1_at_010": 0.1575,
         "confusion_matrix_015": [
           [
             14044,
@@ -193,5 +203,5 @@
     }
   },
   "calibrated": true,
-  "trained_at": "2026-10-10 11:34:42"
+  "trained_at": "2026-10-10 13:18:14"
 }

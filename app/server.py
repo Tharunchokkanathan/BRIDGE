@@ -61,6 +61,12 @@ class ApplyInterventionRequest(BaseModel):
     intervention_id: str
     shipment: Optional[Dict[str, Any]] = None
 
+class CompleteDeliveryRequest(BaseModel):
+    package_id: str
+    outcome: str  # "DELIVERED" or "FAILED"
+    failure_reason: Optional[str] = "NONE"
+    delivery_notes: Optional[str] = ""
+
 
 @app.get("/api/health")
 def health_check():
@@ -166,6 +172,33 @@ def apply_intervention(req: ApplyInterventionRequest):
         "database_backend": db.get_status()["backend"],
         "updated_shipment": updated_rec
     }
+
+@app.post("/api/delivery/complete")
+def complete_delivery(req: CompleteDeliveryRequest):
+    """
+    Live Feedback Loop:
+    Updates customer delivery track record and zone failure priors in real time
+    after every completed or failed delivery attempt.
+    """
+    result = db.complete_delivery(
+        package_id=req.package_id,
+        outcome=req.outcome,
+        failure_reason=req.failure_reason,
+        delivery_notes=req.delivery_notes
+    )
+    
+    # Update in-memory state
+    for item in SAMPLE_DELIVERIES:
+        if item.get("package_id") == req.package_id:
+            item["status"] = f"COMPLETED: {req.outcome}"
+            if "updated_customer_history" in result:
+                hist = result["updated_customer_history"]
+                item["customer_previous_delivery_attempts"] = hist["previous_attempts"]
+                item["customer_previous_failed_attempts"] = hist["previous_fails"]
+                item["customer_previous_success_rate"] = hist["new_success_rate"]
+            break
+
+    return result
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats():

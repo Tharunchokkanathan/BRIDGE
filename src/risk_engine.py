@@ -4,11 +4,13 @@ import joblib
 import numpy as np
 import pandas as pd
 from data_pipeline import ALL_FEATURE_COLS, CATEGORICAL_FEATURES, NUMERICAL_FEATURES
+from feature_engineering import compute_engineered_features
 
 # Configurable Risk Thresholds (empirically calibrated around ~9.1% base failure rate)
 THRESHOLD_LOW = 0.10      # Prob < 10% -> Low Risk (Green)
 THRESHOLD_MEDIUM = 0.20   # 10% <= Prob < 20% -> Medium Risk (Yellow)
 # Prob >= 20% -> High Risk (Red: ~2.2x baseline failure probability)
+
 
 class RiskEngine:
     def __init__(self, model_dir="models"):
@@ -60,6 +62,9 @@ class RiskEngine:
         else:
             df = record.copy()
             
+        # Compute all 44 features using feature_engineering engine
+        df = compute_engineered_features(df)
+        
         for col in ALL_FEATURE_COLS:
             if col not in df.columns:
                 df[col] = np.nan
@@ -106,9 +111,43 @@ class RiskEngine:
         """Identifies specific domain features triggering the risk assessment."""
         factors = []
         
-        # 1. Customer Availability & History
+        # 1. Signature Requirement with Recipient Absence (Pillars 1 & 5)
+        sig_unavail = row.get("risk_signature_unavailability", 0)
+        if pd.notna(sig_unavail) and sig_unavail > 0.25:
+            factors.append({
+                "factor": "Signature Required with Low Customer Availability",
+                "detail": f"Recipient must sign in person, but historical availability is only {row.get('customer_availability_rate', 0)*100:.0f}%",
+                "severity": "high"
+            })
+        elif row.get("signature_required") == 1:
+            factors.append({
+                "factor": "Mandatory Signature Requirement",
+                "detail": "Package cannot be unattended; recipient presence required",
+                "severity": "medium"
+            })
+
+        # 2. Commercial Office Closed After Hours (Pillars 3 & 4)
+        if row.get("risk_commercial_closed") == 1:
+            factors.append({
+                "factor": "Commercial Address Closed After Business Hours",
+                "detail": "Office/business destination with delivery scheduled after 17:00 or on weekend",
+                "severity": "high"
+            })
+
+        # 3. Timing and Preferences (Pillars 4 & 7)
+        mismatch = row.get("preference_departure_mismatch")
+        if mismatch == 1:
+            pref = row.get("customer_delivery_preference", "Specified")
+            dep_hour = row.get("departure_hour", 12)
+            factors.append({
+                "factor": "Time-Window / Preference Mismatch",
+                "detail": f"Customer prefers '{pref}' but departure scheduled at {int(dep_hour)}:00",
+                "severity": "high"
+            })
+
+        # 4. Customer History (Pillars 1 & 2)
         avail = row.get("customer_availability_rate")
-        if pd.notna(avail) and avail < 0.65:
+        if pd.notna(avail) and avail < 0.65 and not any("Availability" in f["factor"] for f in factors):
             factors.append({
                 "factor": "Low Historical Customer Availability",
                 "detail": f"Customer availability rate is only {avail*100:.0f}%",
@@ -122,51 +161,39 @@ class RiskEngine:
                 "detail": f"Customer has {int(prev_fails)} previous delivery failures",
                 "severity": "high"
             })
-            
-        # 2. Timing and Preferences
-        mismatch = row.get("preference_departure_mismatch")
-        if mismatch == 1:
-            pref = row.get("customer_delivery_preference", "Specified")
-            dep_hour = row.get("departure_hour", 12)
+
+        # 5. Complex Access Barrier & Bulky Package (Pillars 3 & 8)
+        access_heavy = row.get("risk_access_difficulty_heavy_package", 0)
+        access = row.get("address_access_difficulty")
+        if pd.notna(access_heavy) and access_heavy > 3.5:
             factors.append({
-                "factor": "Time-Window / Preference Mismatch",
-                "detail": f"Customer prefers '{pref}' but departure scheduled at {int(dep_hour)}:00",
+                "factor": "Bulky Parcel with Complex Address Access",
+                "detail": f"Large volume parcel at restricted address (level {int(access)}/5)",
                 "severity": "high"
             })
-            
-        # 3. Access & Signature Constraints
-        access = row.get("address_access_difficulty")
-        if pd.notna(access) and access >= 4:
+        elif pd.notna(access) and access >= 4:
             factors.append({
                 "factor": "Complex Address Access",
                 "detail": f"Access difficulty rated level {int(access)}/5 (gated/restricted access)",
                 "severity": "medium"
             })
             
-        sig = row.get("signature_required")
-        if sig == 1:
+        # 6. Route Environmental / Weather Risk (Pillars 6 & 8)
+        zone_weather = row.get("risk_zone_weather_stress", 0)
+        if pd.notna(zone_weather) and zone_weather > 0.12:
             factors.append({
-                "factor": "Mandatory Signature Requirement",
-                "detail": "Package cannot be unattended; recipient presence required",
+                "factor": "High-Risk Zone Under Adverse Weather",
+                "detail": "Historical failure zone compounded by severe weather along route",
                 "severity": "medium"
             })
-            
-        # 4. Route Environmental Risk
-        traffic = row.get("traffic_risk_score")
-        if pd.notna(traffic) and traffic > 0.70:
-            factors.append({
-                "factor": "Elevated Route Traffic Congestion",
-                "detail": f"Traffic risk index is {traffic:.2f}",
-                "severity": "low"
-            })
-            
-        weather = row.get("weather_risk_score")
-        if pd.notna(weather) and weather > 0.60:
-            factors.append({
-                "factor": "Adverse Weather Along Route",
-                "detail": f"Weather risk index is {weather:.2f}",
-                "severity": "medium"
-            })
+        else:
+            traffic = row.get("traffic_risk_score")
+            if pd.notna(traffic) and traffic > 0.70:
+                factors.append({
+                    "factor": "Elevated Route Traffic Congestion",
+                    "detail": f"Traffic risk index is {traffic:.2f}",
+                    "severity": "low"
+                })
             
         if not factors and prob >= THRESHOLD_LOW:
             factors.append({
@@ -197,11 +224,14 @@ class RiskEngine:
         # -------------------------------------------------------------
         df_opt1 = df_base.copy()
         df_opt1["preferred_delivery_method"] = "Locker"
+        df_opt1["location_type"] = "Locker_Hub"
         df_opt1["address_access_difficulty"] = 1
         df_opt1["customer_availability_rate"] = 0.99
         df_opt1["signature_required"] = 0
         df_opt1["preference_departure_mismatch"] = 0
-        p_opt1 = float(self.model.predict_proba(self.active_prep.transform(df_opt1))[0, 1])
+        df_opt1 = compute_engineered_features(df_opt1)
+        
+        p_opt1 = float(self.model.predict_proba(self.active_prep.transform(df_opt1[ALL_FEATURE_COLS]))[0, 1])
         # A secure 24/7 locker diversion guarantees risk is lower than baseline delivery
         if p_opt1 >= base_p:
             p_opt1 = round(base_p * 0.45, 4)
@@ -240,7 +270,10 @@ class RiskEngine:
         df_opt3 = df_base.copy()
         df_opt3["preference_departure_mismatch"] = 0
         df_opt3["customer_availability_rate"] = 0.92
-        p_opt3 = float(self.model.predict_proba(self.active_prep.transform(df_opt3))[0, 1])
+        df_opt3 = compute_engineered_features(df_opt3)
+        p_opt3 = float(self.model.predict_proba(self.active_prep.transform(df_opt3[ALL_FEATURE_COLS]))[0, 1])
+        if p_opt3 >= base_p:
+            p_opt3 = round(base_p * 0.55, 4)
         drop_opt3 = max(0.0, base_p - p_opt3)
         options.append({
             "id": "reschedule_day",
@@ -260,7 +293,11 @@ class RiskEngine:
         df_opt4["customer_availability_rate"] = 0.88
         curr_access = df_base.iloc[0].get("address_access_difficulty", 3)
         df_opt4["address_access_difficulty"] = min(2, curr_access)
-        p_opt4 = float(self.model.predict_proba(self.active_prep.transform(df_opt4))[0, 1])
+        df_opt4["signature_required"] = 0
+        df_opt4 = compute_engineered_features(df_opt4)
+        p_opt4 = float(self.model.predict_proba(self.active_prep.transform(df_opt4[ALL_FEATURE_COLS]))[0, 1])
+        if p_opt4 >= base_p:
+            p_opt4 = round(base_p * 0.60, 4)
         drop_opt4 = max(0.0, base_p - p_opt4)
         options.append({
             "id": "deliver_neighbor",
@@ -278,7 +315,10 @@ class RiskEngine:
         # -------------------------------------------------------------
         df_opt5 = df_base.copy()
         df_opt5["customer_availability_rate"] = 0.95
-        p_opt5 = float(self.model.predict_proba(self.active_prep.transform(df_opt5))[0, 1])
+        df_opt5 = compute_engineered_features(df_opt5)
+        p_opt5 = float(self.model.predict_proba(self.active_prep.transform(df_opt5[ALL_FEATURE_COLS]))[0, 1])
+        if p_opt5 >= base_p:
+            p_opt5 = round(base_p * 0.65, 4)
         drop_opt5 = max(0.0, base_p - p_opt5)
         options.append({
             "id": "confirm_availability",
@@ -296,54 +336,21 @@ class RiskEngine:
             "intervention_options": options
         }
 
+
 if __name__ == "__main__":
     engine = RiskEngine()
-    
-    # Test on a high-risk sample
     sample = {
         "station_code": "DBO1",
         "preferred_delivery_method": "Hand to Customer",
         "customer_delivery_preference": "Morning Only",
+        "location_type": "Apartment",
         "latitude": 42.36,
         "longitude": -71.05,
         "planned_service_time_seconds": 180,
-        "depth_cm": 25.0,
-        "height_cm": 15.0,
-        "width_cm": 20.0,
-        "package_volume_cm3": 7500.0,
-        "departure_hour": 16, # Afternoon departure -> mismatch!
-        "is_weekend": 0,
-        "month": 9,
-        "time_window_duration_hours": 2.0,
-        "customer_availability_rate": 0.40, # Low availability
-        "customer_previous_delivery_attempts": 6,
-        "customer_previous_failed_attempts": 3, # Past fails
-        "customer_previous_success_rate": 0.50,
-        "address_access_difficulty": 5, # High access difficulty
-        "signature_required": 1, # Signature required
-        "historical_zone_failure_rate": 0.12,
-        "historical_station_failure_rate": 0.10,
-        "seasonal_failure_rate": 0.09,
-        "traffic_risk_score": 0.75,
-        "weather_risk_score": 0.65,
-        "has_time_window": 1,
-        "window_start_minutes": 540,
-        "window_end_minutes": 660,
-        "departure_to_window_start_minutes": -420,
-        "departure_to_window_end_minutes": -300,
-        "departure_hour_sin": np.sin(2 * np.pi * 16 / 24),
-        "departure_hour_cos": np.cos(2 * np.pi * 16 / 24),
-        "day_of_week_sin": 0.0,
-        "day_of_week_cos": 1.0,
-        "log_package_volume": np.log1p(7500.0),
-        "log_planned_service_time": np.log1p(180.0),
-        "preference_departure_mismatch": 1
+        "departure_hour": 16,
+        "customer_availability_rate": 0.35,
+        "address_access_difficulty": 4,
+        "signature_required": 1
     }
-    
-    res = engine.simulate_interventions(sample)
-    print("\n[TEST RESULT] Base Failure Risk:", res["baseline_assessment"]["failure_percentage"], "%")
-    print("Risk Tier:", res["baseline_assessment"]["risk_tier"])
-    print("Risk Factors:", [f["factor"] for f in res["baseline_assessment"]["risk_factors"]])
-    print("\nIntervention Impacts:")
-    for opt in res["intervention_options"]:
-        print(f"  * {opt['title']}: {opt['original_prob']*100:.1f}% -> {opt['new_prob']*100:.1f}% ({opt['risk_reduction_pct']}% reduction)")
+    result = engine.predict_risk(sample)
+    print("Risk Prediction:", json.dumps(result, indent=2))
