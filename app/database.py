@@ -26,8 +26,8 @@ class DatabaseManager:
     - Manages live feedback loop: records completed delivery outcomes, updates customer histories,
       and recalculates dynamic Bayesian zone failure priors.
     """
-    def __init__(self, db_path="data/bridge_local.db"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = db_path or os.getenv("BRIDGE_DB_PATH", "data/bridge_local.db")
         self.supabase_client = None
         self.is_supabase = bool(SUPABASE_URL and SUPABASE_KEY)
         

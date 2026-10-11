@@ -5,11 +5,12 @@ import numpy as np
 import pandas as pd
 from data_pipeline import ALL_FEATURE_COLS, CATEGORICAL_FEATURES, NUMERICAL_FEATURES
 from feature_engineering import compute_engineered_features
+from calibrator import PlattCalibrator
 
-# Configurable Risk Thresholds (empirically calibrated around ~9.1% base failure rate)
-THRESHOLD_LOW = 0.10      # Prob < 10% -> Low Risk (Green)
-THRESHOLD_MEDIUM = 0.20   # 10% <= Prob < 20% -> Medium Risk (Yellow)
-# Prob >= 20% -> High Risk (Red: ~2.2x baseline failure probability)
+# Validated Operational Risk Thresholds (empirically tuned under <= 20% fleet capacity)
+THRESHOLD_LOW = 0.110      # Prob < 11.0% -> Low Risk (Green)
+THRESHOLD_MEDIUM = 0.140   # 11.0% <= Prob < 14.0% -> Medium Risk (Yellow)
+# Prob >= 14.0% -> High Risk (Red: Intervention priority)
 
 
 class RiskEngine:
@@ -26,9 +27,41 @@ class RiskEngine:
         self.lr_model = joblib.load(os.path.join(model_dir, "logistic_regression.joblib"))
         self.rf_model = joblib.load(os.path.join(model_dir, "random_forest.joblib"))
         
+        # Load candidate model if available
+        self.lgb_model = None
+        lgb_path = os.path.join(model_dir, "lightgbm_candidate.joblib")
+        if os.path.exists(lgb_path):
+            try:
+                self.lgb_model = joblib.load(lgb_path)
+            except Exception as e:
+                print(f"[RiskEngine Warning] Could not load LightGBM candidate: {e}")
+
+        # Load matched calibrators
+        self.calibrator_champion = None
+        cal_champ_path = os.path.join(model_dir, "calibrator_champion.joblib")
+        if os.path.exists(cal_champ_path):
+            try:
+                self.calibrator_champion = joblib.load(cal_champ_path)
+            except Exception as e:
+                print(f"[RiskEngine Warning] Could not load champion calibrator: {e}")
+
+        self.calibrator_candidate = None
+        cal_cand_path = os.path.join(model_dir, "calibrator_candidate.joblib")
+        if os.path.exists(cal_cand_path):
+            try:
+                self.calibrator_candidate = joblib.load(cal_cand_path)
+            except Exception as e:
+                print(f"[RiskEngine Warning] Could not load candidate calibrator: {e}")
+        
+        # Operational thresholds (provisional defaults overridden by metadata if present)
+        op_thresh = self.metadata.get("operational_thresholds", {})
+        self.threshold_low = float(op_thresh.get("tau_low", THRESHOLD_LOW))
+        self.threshold_medium = float(op_thresh.get("tau_med", THRESHOLD_MEDIUM))
+        self.max_capacity_rate = float(op_thresh.get("max_fleet_capacity", 0.20))
+
         self.active_model_name = self.champion_name
         self._update_active_model()
-        print(f"[RiskEngine Initialized] Active model: {self.active_model_name}")
+        print(f"[RiskEngine Initialized] Active model: {self.active_model_name} (Thresholds: Low={self.threshold_low}, Med={self.threshold_medium})")
 
     def _load_metadata(self):
         meta_path = os.path.join(self.model_dir, "model_metadata.json")
@@ -38,9 +71,13 @@ class RiskEngine:
         return {}
 
     def set_active_model(self, model_name):
-        """Allows toggling between Logistic Regression and Random Forest."""
+        """Allows toggling between Logistic Regression, Random Forest, and LightGBM Candidate."""
         if model_name in ["Logistic Regression", "Random Forest"]:
             self.active_model_name = model_name
+            self._update_active_model()
+            return True
+        elif model_name in ["LightGBM Candidate", "LightGBM"] and self.lgb_model is not None:
+            self.active_model_name = "LightGBM Candidate"
             self._update_active_model()
             return True
         return False
@@ -49,12 +86,23 @@ class RiskEngine:
         if self.active_model_name == "Logistic Regression":
             self.model = self.lr_model
             self.active_prep = self.scaled_preprocessor
+            self.active_calibrator = self.calibrator_champion
+        elif self.active_model_name in ["LightGBM Candidate", "LightGBM"]:
+            self.model = self.lgb_model
+            self.active_prep = self.preprocessor
+            self.active_calibrator = self.calibrator_candidate
         else:
             self.model = self.rf_model
             self.active_prep = self.preprocessor
+            self.active_calibrator = None
 
     def _format_input_df(self, record):
         """Ensures input dictionary or series matches feature column format."""
+        if record is None:
+            raise ValueError("Input record cannot be None.")
+        if not isinstance(record, (dict, pd.Series, pd.DataFrame)):
+            raise ValueError(f"Input record must be a dict, pd.Series, or pd.DataFrame, got {type(record).__name__}.")
+
         if isinstance(record, dict):
             df = pd.DataFrame([record])
         elif isinstance(record, pd.Series):
@@ -70,42 +118,144 @@ class RiskEngine:
                 df[col] = np.nan
         return df[ALL_FEATURE_COLS]
 
+    def _assign_risk_band(self, prob):
+        """
+        Assigns standard 3-tier risk category, badge color, and recommended action
+        based strictly on calibrated failure probability and operational cutoffs.
+        """
+        prob = float(np.clip(prob, 0.0, 1.0))
+        if prob < self.threshold_low:
+            return {
+                "risk_tier": "LOW",
+                "badge_color": "green",
+                "recommended_action": "Clear for standard dispatch. High likelihood of first-attempt success."
+            }
+        elif prob < self.threshold_medium:
+            return {
+                "risk_tier": "MEDIUM",
+                "badge_color": "amber",
+                "recommended_action": "Dispatch with SMS/WhatsApp availability check."
+            }
+        else:
+            return {
+                "risk_tier": "HIGH",
+                "badge_color": "red",
+                "recommended_action": "Proactive intervention recommended before vehicle dispatch."
+            }
+
     def predict_risk(self, shipment_record):
         """
-        Calculates failure probability, assigns risk band, and isolates top risk drivers.
+        Calculates calibrated failure probability, assigns risk band, and isolates top risk drivers.
         """
         df_input = self._format_input_df(shipment_record)
         X_proc = self.active_prep.transform(df_input)
         
-        # Predicted probability of delivery failure
-        prob = float(self.model.predict_proba(X_proc)[0, 1])
+        # Raw model score
+        raw_prob = float(self.model.predict_proba(X_proc)[0, 1])
         
-        # Categorize into Risk Tier
-        if prob < THRESHOLD_LOW:
-            risk_tier = "LOW"
-            color = "green"
-            action = "Clear for standard dispatch. High likelihood of first-attempt success."
-        elif prob < THRESHOLD_MEDIUM:
-            risk_tier = "MEDIUM"
-            color = "amber"
-            action = "Dispatch with SMS/WhatsApp availability check."
+        # Apply matched calibrator if available
+        if self.active_calibrator is not None:
+            cal_prob = float(self.active_calibrator.predict_proba(np.array([raw_prob]))[0])
         else:
-            risk_tier = "HIGH"
-            color = "red"
-            action = "Proactive intervention recommended before vehicle dispatch."
+            cal_prob = raw_prob
+            
+        prob = float(np.clip(cal_prob, 0.0, 1.0))
+        
+        # Categorize into Risk Tier using centralized banding
+        band_info = self._assign_risk_band(prob)
 
         # Identify key risk factors for transparency
         risk_factors = self._extract_risk_factors(df_input.iloc[0], prob)
         
         return {
             "failure_probability": round(prob, 4),
+            "raw_probability": round(raw_prob, 4),
             "failure_percentage": round(prob * 100, 1),
-            "risk_tier": risk_tier,
-            "badge_color": color,
-            "recommended_action": action,
+            "risk_tier": band_info["risk_tier"],
+            "badge_color": band_info["badge_color"],
+            "recommended_action": band_info["recommended_action"],
             "risk_factors": risk_factors,
-            "model_used": self.active_model_name
+            "model_used": self.active_model_name,
+            "calibrated": bool(self.active_calibrator is not None)
         }
+
+    def predict_batch(self, records_list):
+        """
+        Batch prediction method that processes a collection of shipment records.
+        Guarantees 100% consistent calibrated probabilities, risk tiers, and schema
+        with predict_risk(), preserving the original input ordering.
+        """
+        if records_list is None:
+            return []
+        if isinstance(records_list, pd.DataFrame):
+            records = [row for _, row in records_list.iterrows()]
+        elif isinstance(records_list, (list, tuple)):
+            records = list(records_list)
+        else:
+            records = [records_list]
+
+        if not records:
+            return []
+
+        return [self.predict_risk(rec) for rec in records]
+
+    def apply_capacity_constrained_policy(self, records_list, max_capacity_rate=None):
+        """
+        Applies a fleet capacity-constrained dynamic ranking policy.
+        Ranks a batch of shipment deliveries by calibrated risk and caps interventions
+        strictly at max_capacity_rate (default: 20%) to prevent operational overrun.
+
+        Guarantees:
+        1. Risk tiers (LOW, MEDIUM, HIGH) remain strictly probability-based and are NEVER downgraded.
+        2. Capacity allocation (capacity_approved, capacity_status) is separated from statistical risk.
+        3. Stable, deterministic tie-breaking: identical probabilities break ties by input order.
+        4. Output order strictly matches the original input batch order.
+        """
+        if not records_list:
+            return []
+
+        if max_capacity_rate is None:
+            max_capacity_rate = self.max_capacity_rate
+
+        results = self.predict_batch(records_list)
+        n_total = len(results)
+        max_interventions = int(np.floor(n_total * max_capacity_rate))
+
+        # Deterministic ranking: sort by (-failure_probability, original_index)
+        # Higher probability ranks first; ties broken by earlier original index.
+        sorted_indices = sorted(
+            range(n_total),
+            key=lambda i: (-results[i]["failure_probability"], i)
+        )
+
+        approved_count = 0
+        for rank, idx in enumerate(sorted_indices):
+            res = results[idx]
+            prob = res["failure_probability"]
+            tier = res["risk_tier"]
+            res["capacity_rank"] = rank + 1
+
+            if rank < max_interventions and prob >= self.threshold_low:
+                res["capacity_approved"] = True
+                res["capacity_status"] = "APPROVED"
+                approved_count += 1
+            else:
+                res["capacity_approved"] = False
+                if tier in ["MEDIUM", "HIGH"] and rank >= max_interventions:
+                    res["capacity_status"] = "DEFERRED_DUE_TO_FLEET_CAPACITY"
+                    res["recommended_action"] = (
+                        f"Elevated risk ({tier}), but deferred by {int(max_capacity_rate*100)}% fleet capacity limit. "
+                        "Standard dispatch with priority monitoring."
+                    )
+                else:
+                    res["capacity_status"] = "NOT_ELIGIBLE_LOW_RISK"
+
+        # Attach allocation summary rate
+        alloc_rate = round(approved_count / n_total, 4) if n_total > 0 else 0.0
+        for res in results:
+            res["fleet_allocation_rate"] = alloc_rate
+
+        return results
 
     def _extract_risk_factors(self, row, prob):
         """Identifies specific domain features triggering the risk assessment."""
@@ -195,7 +345,7 @@ class RiskEngine:
                     "severity": "low"
                 })
             
-        if not factors and prob >= THRESHOLD_LOW:
+        if not factors and prob >= self.threshold_low:
             factors.append({
                 "factor": "Aggregated Context Risk",
                 "detail": "Combined baseline probability elevated by area failure priors",
@@ -203,6 +353,13 @@ class RiskEngine:
             })
             
         return factors
+
+    def _calibrate_prob(self, raw_prob):
+        """Helper to apply active calibrator consistently."""
+        if self.active_calibrator is not None:
+            cal = float(self.active_calibrator.predict_proba(np.array([raw_prob]))[0])
+            return float(np.clip(cal, 0.0, 1.0))
+        return float(np.clip(raw_prob, 0.0, 1.0))
 
     def simulate_interventions(self, shipment_record):
         """
@@ -231,11 +388,13 @@ class RiskEngine:
         df_opt1["preference_departure_mismatch"] = 0
         df_opt1 = compute_engineered_features(df_opt1)
         
-        p_opt1 = float(self.model.predict_proba(self.active_prep.transform(df_opt1[ALL_FEATURE_COLS]))[0, 1])
+        raw_p_opt1 = float(self.model.predict_proba(self.active_prep.transform(df_opt1[ALL_FEATURE_COLS]))[0, 1])
+        p_opt1 = self._calibrate_prob(raw_p_opt1)
         # A secure 24/7 locker diversion guarantees risk is lower than baseline delivery
         if p_opt1 >= base_p:
             p_opt1 = round(base_p * 0.45, 4)
         drop_opt1 = max(0.0, base_p - p_opt1)
+        tier_opt1 = self._assign_risk_band(p_opt1)["risk_tier"]
         
         options.append({
             "id": "access_point",
@@ -244,8 +403,8 @@ class RiskEngine:
             "original_prob": base_p,
             "new_prob": round(p_opt1, 4),
             "risk_reduction_pct": round((drop_opt1 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": "LOW" if p_opt1 < THRESHOLD_LOW else "MEDIUM",
-            "recommended": True if drop_opt1 >= 0.05 or p_opt1 < THRESHOLD_LOW else False
+            "new_risk_tier": tier_opt1,
+            "recommended": True if drop_opt1 >= 0.05 or p_opt1 < self.threshold_low else False
         })
         
         # -------------------------------------------------------------
@@ -253,6 +412,7 @@ class RiskEngine:
         # -------------------------------------------------------------
         p_opt2 = 0.015  # Near-zero failure rate since package stays at warehouse counter
         drop_opt2 = max(0.0, base_p - p_opt2)
+        tier_opt2 = self._assign_risk_band(p_opt2)["risk_tier"]
         options.append({
             "id": "hold_pickup",
             "title": "Hold for Pickup at Station",
@@ -260,7 +420,7 @@ class RiskEngine:
             "original_prob": base_p,
             "new_prob": round(p_opt2, 4),
             "risk_reduction_pct": round((drop_opt2 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": "LOW",
+            "new_risk_tier": tier_opt2,
             "recommended": False
         })
         
@@ -271,10 +431,12 @@ class RiskEngine:
         df_opt3["preference_departure_mismatch"] = 0
         df_opt3["customer_availability_rate"] = 0.92
         df_opt3 = compute_engineered_features(df_opt3)
-        p_opt3 = float(self.model.predict_proba(self.active_prep.transform(df_opt3[ALL_FEATURE_COLS]))[0, 1])
+        raw_p_opt3 = float(self.model.predict_proba(self.active_prep.transform(df_opt3[ALL_FEATURE_COLS]))[0, 1])
+        p_opt3 = self._calibrate_prob(raw_p_opt3)
         if p_opt3 >= base_p:
             p_opt3 = round(base_p * 0.55, 4)
         drop_opt3 = max(0.0, base_p - p_opt3)
+        tier_opt3 = self._assign_risk_band(p_opt3)["risk_tier"]
         options.append({
             "id": "reschedule_day",
             "title": "Deliver on Another Day",
@@ -282,7 +444,7 @@ class RiskEngine:
             "original_prob": base_p,
             "new_prob": round(p_opt3, 4),
             "risk_reduction_pct": round((drop_opt3 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": "LOW" if p_opt3 < THRESHOLD_LOW else "MEDIUM",
+            "new_risk_tier": tier_opt3,
             "recommended": True if df_base.iloc[0].get("preference_departure_mismatch") == 1 else False
         })
         
@@ -295,10 +457,12 @@ class RiskEngine:
         df_opt4["address_access_difficulty"] = min(2, curr_access)
         df_opt4["signature_required"] = 0
         df_opt4 = compute_engineered_features(df_opt4)
-        p_opt4 = float(self.model.predict_proba(self.active_prep.transform(df_opt4[ALL_FEATURE_COLS]))[0, 1])
+        raw_p_opt4 = float(self.model.predict_proba(self.active_prep.transform(df_opt4[ALL_FEATURE_COLS]))[0, 1])
+        p_opt4 = self._calibrate_prob(raw_p_opt4)
         if p_opt4 >= base_p:
             p_opt4 = round(base_p * 0.60, 4)
         drop_opt4 = max(0.0, base_p - p_opt4)
+        tier_opt4 = self._assign_risk_band(p_opt4)["risk_tier"]
         options.append({
             "id": "deliver_neighbor",
             "title": "Deliver to a Neighbor / Front Desk",
@@ -306,7 +470,7 @@ class RiskEngine:
             "original_prob": base_p,
             "new_prob": round(p_opt4, 4),
             "risk_reduction_pct": round((drop_opt4 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": "LOW" if p_opt4 < THRESHOLD_LOW else "MEDIUM",
+            "new_risk_tier": tier_opt4,
             "recommended": False
         })
         
@@ -316,10 +480,12 @@ class RiskEngine:
         df_opt5 = df_base.copy()
         df_opt5["customer_availability_rate"] = 0.95
         df_opt5 = compute_engineered_features(df_opt5)
-        p_opt5 = float(self.model.predict_proba(self.active_prep.transform(df_opt5[ALL_FEATURE_COLS]))[0, 1])
+        raw_p_opt5 = float(self.model.predict_proba(self.active_prep.transform(df_opt5[ALL_FEATURE_COLS]))[0, 1])
+        p_opt5 = self._calibrate_prob(raw_p_opt5)
         if p_opt5 >= base_p:
             p_opt5 = round(base_p * 0.65, 4)
         drop_opt5 = max(0.0, base_p - p_opt5)
+        tier_opt5 = self._assign_risk_band(p_opt5)["risk_tier"]
         options.append({
             "id": "confirm_availability",
             "title": "Confirm Availability & Proceed",
@@ -327,7 +493,7 @@ class RiskEngine:
             "original_prob": base_p,
             "new_prob": round(p_opt5, 4),
             "risk_reduction_pct": round((drop_opt5 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": "LOW" if p_opt5 < THRESHOLD_LOW else "MEDIUM",
+            "new_risk_tier": tier_opt5,
             "recommended": False
         })
         

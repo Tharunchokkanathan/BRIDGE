@@ -26,28 +26,45 @@ def verify_no_leakage(df_cols):
     return verify_feature_integrity(df_cols)
 
 
-def load_and_split_data(csv_path="data/amazon_delivery_ml_features_sample.csv", test_size=0.15, val_size=0.15, random_state=42):
+def load_and_split_data(
+    csv_path="data/amazon_delivery_ml_features_sample.csv",
+    test_size=0.15,
+    val_size=0.15,
+    random_state=42,
+    use_duckdb=False
+):
     """
     Loads dataset, isolates target & metadata, and performs route-group-aware split.
     Packages from the same route will not be split across train and test.
+    Supports both standard pandas loading and high-performance DuckDB query extraction.
     """
-    print(f"Loading data from {csv_path}...")
-    df = pd.read_csv(csv_path)
-    print(f"Loaded {len(df):,} rows and {len(df.columns)} columns.")
-    
-    # Verify target exists
-    assert TARGET_COL in df.columns, f"{TARGET_COL} not found in columns!"
-    
-    # Ensure all engineered features are present
-    df = compute_engineered_features(df)
-    
-    # Feature columns
-    feature_cols = [c for c in df.columns if c in ALL_FEATURE_COLS]
-    verify_no_leakage(feature_cols)
-    
-    X = df[feature_cols].copy()
-    y = df[TARGET_COL].astype(int).values
-    groups = df["route_id"].values
+    if use_duckdb:
+        from duckdb_store import DuckDBFeatureStore
+        print(f"Loading data via DuckDB from {csv_path}...")
+        store = DuckDBFeatureStore()
+        X, y, groups, meta_src = store.get_training_data(csv_path)
+        feature_cols = [c for c in X.columns if c in ALL_FEATURE_COLS]
+        verify_no_leakage(feature_cols)
+        print(f"Loaded {len(X):,} rows and {len(feature_cols)} feature columns via DuckDB.")
+    else:
+        print(f"Loading data from {csv_path}...")
+        df = pd.read_csv(csv_path)
+        print(f"Loaded {len(df):,} rows and {len(df.columns)} columns.")
+        
+        # Verify target exists
+        assert TARGET_COL in df.columns, f"{TARGET_COL} not found in columns!"
+        
+        # Ensure all engineered features are present
+        df = compute_engineered_features(df)
+        
+        # Feature columns
+        feature_cols = [c for c in df.columns if c in ALL_FEATURE_COLS]
+        verify_no_leakage(feature_cols)
+        
+        X = df[feature_cols].copy()
+        y = df[TARGET_COL].astype(int).values
+        groups = df["route_id"].values
+        meta_src = df[["route_id", "stop_id", "package_id", "delivery_date"]]
     
     # Step 1: Split train+val vs test using GroupShuffleSplit on route_id
     gss_test = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
@@ -57,7 +74,7 @@ def load_and_split_data(csv_path="data/amazon_delivery_ml_features_sample.csv", 
     groups_train_val = groups[train_val_idx]
     
     X_test, y_test = X.iloc[test_idx], y[test_idx]
-    test_meta = df.iloc[test_idx][["route_id", "stop_id", "package_id", "delivery_date"]]
+    test_meta = meta_src.iloc[test_idx][["route_id", "stop_id", "package_id", "delivery_date"]]
     
     # Step 2: Split train vs val using GroupShuffleSplit
     val_ratio = val_size / (1.0 - test_size)
