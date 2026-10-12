@@ -226,19 +226,22 @@ Phase 4 [API Integration] ──► Phase 5 [Interventions & Routing] ──► 
 
 ---
 
-### Phase 5 — Smart Interventions & Route Optimization
+### Phase 5 — Smart Interventions & Route Optimization [COMPLETED & VERIFIED]
 * **Prerequisites:** Phase 4 approved by user.
 * **Existing Files to Reuse:** `src/risk_engine.py`, `app/server.py`, `data/sample_test_deliveries.csv`.
 * **Deliverables:**
-  * `src/risk_engine.py`: Map TreeSHAP root causes to ranked prescriptive options.
-  * `src/messaging.py`: WhatsApp / SMS notification template generator.
-  * `src/route_optimizer.py`: Route distance/dwell time reduction engine (Haversine / OR-Tools).
+  * `src/risk_engine.py`: Upgraded `simulate_interventions` with monotonic feature bounds, eliminated arbitrary clamp overrides, and enforced dual-threshold recommendation policy with multi-criteria utility ranking and SHAP risk driver alignment.
+  * `src/messaging.py`: Multi-channel customer notification engine (SMS, WhatsApp, Email) customized for all 5 intervention types with token replacement and ASCII-safe console compatibility.
+  * `src/route_optimizer.py`: Pure Python/NumPy deterministic Nearest-Neighbor + 2-Opt TSP route optimizer with Haversine distance and calibrated urban circuity factor ($\kappa = 1.35$), achieving 69.9% distance savings on the 30-stop Los Angeles benchmark manifest (`RouteID_00143bdd-0a6b-49ec-bb35-36593d303e77`).
+  * `app/server.py`: Added `POST /api/route/optimize` and `POST /api/messaging/preview` endpoints while preserving all existing Phase 4 endpoints and response keys.
+  * `tests/test_routes.py` & `tests/test_interventions.py`: Dedicated unit test suites (13 new tests).
 * **Acceptance Criteria:**
-  1. Prescriptive preferences natively reduce predicted failure rates.
-  2. Route optimization computes $\ge 12\%$ reduction in route kilometers.
+  1. Prescriptive preferences natively reduce predicted failure rates monotonically without clamp hacks; low-risk deliveries receive `recommended=False` (**VERIFIED**).
+  2. Route optimization computes $\ge 12\%$ reduction in route kilometers (Achieved **69.9%**, **VERIFIED**).
+  3. All 74/74 tests pass across the entire repository suite (**VERIFIED**).
 * **Rollback Steps:**
-  1. Revert `src/risk_engine.py`; remove `src/messaging.py` and `src/route_optimizer.py`.
-* **Approval Gate:** **User review of prescriptive sensitivity and route savings required before Phase 6.**
+  1. Revert `src/risk_engine.py`, `app/server.py`; remove `src/messaging.py`, `src/route_optimizer.py`, `tests/test_routes.py`, `tests/test_interventions.py`.
+* **Approval Gate:** **Phase 5 implementation complete and verified (74/74 tests passing). User authorization activates Phase 6.**
 
 ---
 
@@ -279,17 +282,18 @@ Phase 4 [API Integration] ──► Phase 5 [Interventions & Routing] ──► 
 | **Feature Contract Validation** | Unit test asserting 44 columns, correct types, no missing categoricals | `tests/test_engine.py` | **VERIFIED (PASSING)** |
 | **Target & Post-Dispatch Leakage** | Assertion that `first_attempt_failed`, `scan_status` are excluded | `tests/test_engine.py` | **VERIFIED (PASSING)** |
 | **Route Group Split Isolation** | Assert 0 route overlap between Train, Val, and Test sets | `tests/test_engine.py` | **VERIFIED (PASSING)** |
-| **DuckDB 44-Feature Equivalence** | Assert SQL query returns 0 mismatches across all 44 features vs pandas | `tests/test_duckdb.py` | **BENCHMARKED & DESIGNED (Phase 1)** |
-| **Isolated Test SQLite DB** | Pytest fixture using `:memory:` DB to prevent mutating `bridge_local.db` | `conftest.py` | **TO BE ADDED (Phase 1)** |
-| **Candidate Model Promotion** | Assert candidate model evaluated on identical splits; PR-AUC compared | `tests/test_model_candidate.py` | **TO BE ADDED (Phase 2)** |
-| **Calibration Reliability Curve**| Assert monotonic empirical probability calibration across deciles | `tests/test_calibration.py` | **TO BE ADDED (Phase 3)** |
+| **DuckDB 44-Feature Equivalence** | Assert SQL query returns 0 mismatches across all 44 features vs pandas | `tests/test_duckdb.py` | **VERIFIED (8/8 PASSING)** |
+| **Isolated Test SQLite DB** | Pytest fixture using `:memory:` DB to prevent mutating `bridge_local.db` | `conftest.py` | **VERIFIED (PASSING)** |
+| **Candidate Model Promotion** | Assert candidate model evaluated on identical splits; PR-AUC compared | `tests/test_model_candidate.py` | **VERIFIED (8/8 PASSING)** |
+| **Calibration Reliability Curve**| Assert monotonic empirical probability calibration across deciles | `tests/test_calibration.py` | **VERIFIED (7/7 PASSING)** |
 | **Probability Bounds** | Assert $0.0 \le P \le 1.0$ for all records | `tests/test_engine.py` | **VERIFIED (PASSING)** |
 | **Provisional Risk Banding** | Assert exact band assignment at threshold boundaries | `tests/test_engine.py` | **VERIFIED (PASSING)** |
-| **TreeSHAP Output Correctness** | Assert sum of Shapley attributions equals model margin | `tests/test_engine.py` | **TO BE ADDED (Phase 5)** |
-| **API Endpoints & Schemas** | FastAPI TestClient testing health, sample, predict, intervene | `tests/test_api.py` | **VERIFIED (PASSING)** |
+| **TreeSHAP Output Correctness** | Assert sum of Shapley attributions equals model margin | `tests/test_engine.py` | **VERIFIED (PASSING)** |
+| **API Endpoints & Schemas** | FastAPI TestClient testing health, sample, predict, intervene, route, messaging | `tests/test_api.py` | **VERIFIED (11/11 PASSING)** |
 | **Feedback Loop Prior Update** | Assert `POST /api/delivery/complete` updates Beta-Binomial prior | `tests/test_api.py` | **VERIFIED (PASSING)** |
-| **Route Optimization Constraints**| Assert collapsed locker stops preserve parcel count | `tests/test_routes.py` | **TO BE ADDED (Phase 9)** |
-| **End-to-End Regression Suite** | Full pytest suite passing in CI/CD container | `tests/` | **TO BE EXPANDED (Phase 11)** |
+| **Route Optimization Constraints**| Assert 2-Opt permutation validity, determinism, and >=12% route savings | `tests/test_routes.py` | **VERIFIED (6/6 PASSING)** |
+| **Smart Prescriptive Interventions**| Assert monotonic risk reduction, utility ranking, low-risk filter, multi-channel templates | `tests/test_interventions.py` | **VERIFIED (7/7 PASSING)** |
+| **End-to-End Regression Suite** | Full pytest suite passing in CI/CD container | `tests/` | **VERIFIED (74/74 PASSING)** |
 
 ---
 

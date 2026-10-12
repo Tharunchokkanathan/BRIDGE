@@ -304,6 +304,87 @@ class TestBridgeAPIServer(unittest.TestCase):
         self.assertEqual(data2["updated_customer_history"]["previous_fails"], 1)
         self.assertGreater(data2["updated_zone_prior"]["new_zone_failure_rate"], 0.0)
 
+    def test_route_optimize_endpoint(self):
+        """Verifies POST /api/route/optimize on sample deliveries and custom stops."""
+        # 1. Optimize using sample route
+        payload = {"route_id": "RouteID_00143bdd-0a6b-49ec-bb35-36593d303e77"}
+        res = self.client.post("/api/route/optimize", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("original_distance_km", data)
+        self.assertIn("optimized_distance_km", data)
+        self.assertIn("distance_savings_km", data)
+        self.assertIn("distance_savings_pct", data)
+        self.assertIn("original_stop_sequence", data)
+        self.assertIn("optimized_stop_sequence", data)
+        self.assertGreater(data["distance_savings_pct"], 12.0)
+        self.assertTrue(data["savings_target_met"])
+        self.assertEqual(data["stops_count"], 30)
+
+        # 2. Optimize custom stops
+        custom_payload = {
+            "stops": [
+                {"stop_id": "S1", "latitude": 34.05, "longitude": -118.25},
+                {"stop_id": "S2", "latitude": 34.06, "longitude": -118.26},
+                {"stop_id": "S3", "latitude": 34.07, "longitude": -118.27}
+            ]
+        }
+        res_custom = self.client.post("/api/route/optimize", json=custom_payload)
+        self.assertEqual(res_custom.status_code, 200)
+        data_custom = res_custom.json()
+        self.assertEqual(data_custom["stops_count"], 3)
+        self.assertEqual(len(data_custom["optimized_stop_sequence"]), 3)
+
+    def test_route_optimize_with_interventions(self):
+        """Verifies route optimization with smart locker consolidation / station holds."""
+        payload = {
+            "route_id": "RouteID_00143bdd-0a6b-49ec-bb35-36593d303e77",
+            "apply_interventions": True
+        }
+        res = self.client.post("/api/route/optimize", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["interventions_applied"])
+        self.assertIn("optimized_distance_km", data)
+        self.assertGreater(data["distance_savings_pct"], 12.0)
+
+    def test_messaging_preview_endpoint(self):
+        """Verifies POST /api/messaging/preview across SMS, WhatsApp, and Email."""
+        # SMS test
+        sms_payload = {
+            "package_id": "PKG-ROUTE-100",
+            "intervention_id": "access_point",
+            "channel": "SMS"
+        }
+        res_sms = self.client.post("/api/messaging/preview", json=sms_payload)
+        self.assertEqual(res_sms.status_code, 200)
+        data_sms = res_sms.json()
+        self.assertEqual(data_sms["channel"], "SMS")
+        self.assertIn("BRIDGE Alert", data_sms["content"])
+        self.assertIn("PKG-ROUTE-100", data_sms["content"])
+
+        # WhatsApp test
+        wa_payload = {
+            "package_id": "PKG-ROUTE-100",
+            "intervention_id": "confirm_availability",
+            "channel": "WhatsApp",
+            "recipient_name": "Sarah Connor"
+        }
+        res_wa = self.client.post("/api/messaging/preview", json=wa_payload)
+        self.assertEqual(res_wa.status_code, 200)
+        data_wa = res_wa.json()
+        self.assertEqual(data_wa["channel"], "WHATSAPP")
+        self.assertIn("Sarah Connor", data_wa["content"])
+
+        # Invalid channel test
+        bad_payload = {
+            "package_id": "PKG-ROUTE-100",
+            "intervention_id": "access_point",
+            "channel": "TELEGRAM"
+        }
+        res_bad = self.client.post("/api/messaging/preview", json=bad_payload)
+        self.assertEqual(res_bad.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

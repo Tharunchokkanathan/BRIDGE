@@ -14,6 +14,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.append(os.path.dirname(__file__))
 
 from risk_engine import RiskEngine
+from route_optimizer import RouteOptimizer
+from messaging import MessageDispatcher
 from database import db
 
 app = FastAPI(
@@ -33,6 +35,8 @@ app.add_middleware(
 
 # Initialize Risk Engine (defaults to Champion: Logistic Regression)
 ENGINE = RiskEngine(model_dir=os.path.join(os.path.dirname(__file__), "..", "models"))
+ROUTE_OPTIMIZER = RouteOptimizer()
+MESSAGE_DISPATCHER = MessageDispatcher()
 
 # Cache sample deliveries for quick UI exploration & seed to database
 SAMPLE_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "sample_test_deliveries.csv")
@@ -76,6 +80,20 @@ class CompleteDeliveryRequest(BaseModel):
     outcome: str  # "DELIVERED" or "FAILED"
     failure_reason: Optional[str] = "NONE"
     delivery_notes: Optional[str] = ""
+
+class RouteOptimizeRequest(BaseModel):
+    route_id: Optional[str] = None
+    shipments: Optional[List[Dict[str, Any]]] = None
+    stops: Optional[List[Dict[str, Any]]] = None
+    apply_interventions: bool = False
+    return_to_depot: bool = False
+
+class MessagePreviewRequest(BaseModel):
+    package_id: str
+    intervention_id: str
+    channel: str = "SMS"
+    recipient_name: Optional[str] = None
+    eta_window: Optional[str] = None
 
 
 @app.get("/api/health")
@@ -275,6 +293,56 @@ def complete_delivery(req: CompleteDeliveryRequest):
             break
 
     return result
+
+@app.post("/api/route/optimize")
+def optimize_route(req: RouteOptimizeRequest):
+    """
+    Solves route optimization using deterministic Nearest-Neighbor + 2-Opt heuristic,
+    with Haversine distance, calibrated urban circuity modeling, and smart intervention consolidation.
+    """
+    try:
+        target_shipments = []
+        if req.shipments is not None and len(req.shipments) > 0:
+            target_shipments = req.shipments
+        elif req.stops is not None and len(req.stops) > 0:
+            result = ROUTE_OPTIMIZER.optimize_stops(req.stops, return_to_depot=req.return_to_depot)
+            result["route_id"] = req.route_id or "CUSTOM_STOPS"
+            return result
+        elif req.route_id:
+            target_shipments = [p for p in SAMPLE_DELIVERIES if p.get("route_id") == req.route_id]
+            if not target_shipments:
+                target_shipments = SAMPLE_DELIVERIES
+        else:
+            target_shipments = SAMPLE_DELIVERIES
+
+        result = ROUTE_OPTIMIZER.optimize_route_from_shipments(
+            target_shipments,
+            apply_interventions=req.apply_interventions,
+            return_to_depot=req.return_to_depot
+        )
+        result["route_id"] = req.route_id or (target_shipments[0].get("route_id") if target_shipments else "ROUTE_DEFAULT")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/messaging/preview")
+def preview_messaging(req: MessagePreviewRequest):
+    """
+    Generates multi-channel customer engagement preview for a specific intervention.
+    """
+    try:
+        preview = MESSAGE_DISPATCHER.preview_message(
+            package_id=req.package_id,
+            intervention_id=req.intervention_id,
+            channel=req.channel,
+            recipient_name=req.recipient_name,
+            eta_window=req.eta_window
+        )
+        return preview
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats():

@@ -435,13 +435,23 @@ class RiskEngine:
         3. Deliver on Another Day
         4. Deliver to a Neighbor
         5. Confirm Availability and Proceed
+
+        Phase 5 Upgrades:
+        - Monotonic feature mutations based on active model and calibrator.
+        - Elimination of arbitrary clamp overrides.
+        - Dual-threshold recommendation policy: base_p >= threshold_low and utility >= 0.25.
+        - Integration with SHAP driver signatures and multi-criteria utility ranking.
         """
         baseline_risk = self.predict_risk(shipment_record)
         base_p = baseline_risk["failure_probability"]
-        
+        base_tier = baseline_risk["risk_tier"]
+        risk_factors = [rf.get("feature") for rf in baseline_risk.get("risk_factors", [])]
+
         df_base = self._format_input_df(shipment_record)
-        options = []
-        
+        curr_avail = float(df_base.iloc[0].get("customer_availability_rate") or 0.85)
+        curr_access = int(df_base.iloc[0].get("address_access_difficulty") or 2)
+        mismatch_in_base = int(df_base.iloc[0].get("preference_departure_mismatch") or 0)
+
         # -------------------------------------------------------------
         # Option 1: Deliver to Access Point / PUDO Locker
         # -------------------------------------------------------------
@@ -449,120 +459,183 @@ class RiskEngine:
         df_opt1["preferred_delivery_method"] = "Locker"
         df_opt1["location_type"] = "Locker_Hub"
         df_opt1["address_access_difficulty"] = 1
-        df_opt1["customer_availability_rate"] = 0.99
+        df_opt1["customer_availability_rate"] = max(curr_avail, 0.99)
         df_opt1["signature_required"] = 0
         df_opt1["preference_departure_mismatch"] = 0
         df_opt1 = compute_engineered_features(df_opt1)
-        
+
         raw_p_opt1 = float(self.model.predict_proba(self.active_prep.transform(df_opt1[ALL_FEATURE_COLS]))[0, 1])
         p_opt1 = self._calibrate_prob(raw_p_opt1)
-        # A secure 24/7 locker diversion guarantees risk is lower than baseline delivery
-        if p_opt1 >= base_p:
-            p_opt1 = round(base_p * 0.45, 4)
+        p_opt1 = round(min(base_p, p_opt1), 4)
         drop_opt1 = max(0.0, base_p - p_opt1)
         tier_opt1 = self._assign_risk_band(p_opt1)["risk_tier"]
-        
-        options.append({
-            "id": "access_point",
-            "title": "Deliver to Access Point / Smart Locker",
-            "description": "Reroute to a nearby 24/7 secure locker or PUDO partner counter.",
-            "original_prob": base_p,
-            "new_prob": round(p_opt1, 4),
-            "risk_reduction_pct": round((drop_opt1 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": tier_opt1,
-            "recommended": True if drop_opt1 >= 0.05 or p_opt1 < self.threshold_low else False
-        })
-        
+
         # -------------------------------------------------------------
         # Option 2: Hold for Pickup at Delivery Station
         # -------------------------------------------------------------
         p_opt2 = 0.015  # Near-zero failure rate since package stays at warehouse counter
+        p_opt2 = round(min(base_p, p_opt2), 4)
         drop_opt2 = max(0.0, base_p - p_opt2)
         tier_opt2 = self._assign_risk_band(p_opt2)["risk_tier"]
-        options.append({
-            "id": "hold_pickup",
-            "title": "Hold for Pickup at Station",
-            "description": "Hold package safely at the local distribution station counter.",
-            "original_prob": base_p,
-            "new_prob": round(p_opt2, 4),
-            "risk_reduction_pct": round((drop_opt2 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": tier_opt2,
-            "recommended": False
-        })
-        
+
         # -------------------------------------------------------------
         # Option 3: Deliver on Another Day
         # -------------------------------------------------------------
         df_opt3 = df_base.copy()
         df_opt3["preference_departure_mismatch"] = 0
-        df_opt3["customer_availability_rate"] = 0.92
+        df_opt3["customer_availability_rate"] = max(curr_avail, 0.95)
         df_opt3 = compute_engineered_features(df_opt3)
         raw_p_opt3 = float(self.model.predict_proba(self.active_prep.transform(df_opt3[ALL_FEATURE_COLS]))[0, 1])
         p_opt3 = self._calibrate_prob(raw_p_opt3)
-        if p_opt3 >= base_p:
-            p_opt3 = round(base_p * 0.55, 4)
+        p_opt3 = round(min(base_p, p_opt3), 4)
         drop_opt3 = max(0.0, base_p - p_opt3)
         tier_opt3 = self._assign_risk_band(p_opt3)["risk_tier"]
-        options.append({
-            "id": "reschedule_day",
-            "title": "Deliver on Another Day",
-            "description": "Customer chooses a convenient alternative date when they are guaranteed to be home.",
-            "original_prob": base_p,
-            "new_prob": round(p_opt3, 4),
-            "risk_reduction_pct": round((drop_opt3 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": tier_opt3,
-            "recommended": True if df_base.iloc[0].get("preference_departure_mismatch") == 1 else False
-        })
-        
+
         # -------------------------------------------------------------
         # Option 4: Deliver to a Neighbor / Guard
         # -------------------------------------------------------------
         df_opt4 = df_base.copy()
-        df_opt4["customer_availability_rate"] = 0.88
-        curr_access = df_base.iloc[0].get("address_access_difficulty", 3)
+        df_opt4["customer_availability_rate"] = max(curr_avail, 0.90)
         df_opt4["address_access_difficulty"] = min(2, curr_access)
         df_opt4["signature_required"] = 0
         df_opt4 = compute_engineered_features(df_opt4)
         raw_p_opt4 = float(self.model.predict_proba(self.active_prep.transform(df_opt4[ALL_FEATURE_COLS]))[0, 1])
         p_opt4 = self._calibrate_prob(raw_p_opt4)
-        if p_opt4 >= base_p:
-            p_opt4 = round(base_p * 0.60, 4)
+        p_opt4 = round(min(base_p, p_opt4), 4)
         drop_opt4 = max(0.0, base_p - p_opt4)
         tier_opt4 = self._assign_risk_band(p_opt4)["risk_tier"]
-        options.append({
-            "id": "deliver_neighbor",
-            "title": "Deliver to a Neighbor / Front Desk",
-            "description": "Authorize driver to hand off to designated neighbor or building security.",
-            "original_prob": base_p,
-            "new_prob": round(p_opt4, 4),
-            "risk_reduction_pct": round((drop_opt4 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": tier_opt4,
-            "recommended": False
-        })
-        
+
         # -------------------------------------------------------------
         # Option 5: Confirm Availability and Proceed
         # -------------------------------------------------------------
         df_opt5 = df_base.copy()
-        df_opt5["customer_availability_rate"] = 0.95
+        df_opt5["customer_availability_rate"] = max(curr_avail, 0.96)
+        df_opt5["preference_departure_mismatch"] = 0
         df_opt5 = compute_engineered_features(df_opt5)
         raw_p_opt5 = float(self.model.predict_proba(self.active_prep.transform(df_opt5[ALL_FEATURE_COLS]))[0, 1])
         p_opt5 = self._calibrate_prob(raw_p_opt5)
-        if p_opt5 >= base_p:
-            p_opt5 = round(base_p * 0.65, 4)
+        p_opt5 = round(min(base_p, p_opt5), 4)
         drop_opt5 = max(0.0, base_p - p_opt5)
         tier_opt5 = self._assign_risk_band(p_opt5)["risk_tier"]
-        options.append({
-            "id": "confirm_availability",
-            "title": "Confirm Availability & Proceed",
-            "description": "Customer confirms presence at address during scheduled delivery window.",
-            "original_prob": base_p,
-            "new_prob": round(p_opt5, 4),
-            "risk_reduction_pct": round((drop_opt5 / (base_p + 1e-6)) * 100, 1),
-            "new_risk_tier": tier_opt5,
-            "recommended": False
-        })
-        
+
+        raw_candidates = [
+            {
+                "id": "access_point",
+                "title": "Deliver to Access Point / Smart Locker",
+                "description": "Reroute to a nearby 24/7 secure locker or PUDO partner counter.",
+                "original_prob": base_p,
+                "new_prob": p_opt1,
+                "risk_reduction_pct": round((drop_opt1 / (base_p + 1e-6)) * 100, 1),
+                "new_risk_tier": tier_opt1,
+                "cost": 0.20,
+                "cost_tier": "LOW_TO_MODERATE",
+                "drop": drop_opt1,
+                "rationale": "Diverts high-risk home delivery to 24/7 secure locker, eliminating access hurdles."
+            },
+            {
+                "id": "hold_pickup",
+                "title": "Hold for Pickup at Station",
+                "description": "Hold package safely at the local distribution station counter.",
+                "original_prob": base_p,
+                "new_prob": p_opt2,
+                "risk_reduction_pct": round((drop_opt2 / (base_p + 1e-6)) * 100, 1),
+                "new_risk_tier": tier_opt2,
+                "cost": 0.60,
+                "cost_tier": "HIGH",
+                "drop": drop_opt2,
+                "rationale": "Holds package safely at distribution facility counter for customer collection."
+            },
+            {
+                "id": "reschedule_day",
+                "title": "Deliver on Another Day",
+                "description": "Customer chooses a convenient alternative date when they are guaranteed to be home.",
+                "original_prob": base_p,
+                "new_prob": p_opt3,
+                "risk_reduction_pct": round((drop_opt3 / (base_p + 1e-6)) * 100, 1),
+                "new_risk_tier": tier_opt3,
+                "cost": 0.35,
+                "cost_tier": "MODERATE",
+                "drop": drop_opt3,
+                "rationale": "Reschedules dispatch to eliminate departure-time mismatch when recipient is available."
+            },
+            {
+                "id": "deliver_neighbor",
+                "title": "Deliver to a Neighbor / Front Desk",
+                "description": "Authorize driver to hand off to designated neighbor or building security.",
+                "original_prob": base_p,
+                "new_prob": p_opt4,
+                "risk_reduction_pct": round((drop_opt4 / (base_p + 1e-6)) * 100, 1),
+                "new_risk_tier": tier_opt4,
+                "cost": 0.15,
+                "cost_tier": "LOW",
+                "drop": drop_opt4,
+                "rationale": "Delegates dropoff to building front desk or verified neighbor."
+            },
+            {
+                "id": "confirm_availability",
+                "title": "Confirm Availability & Proceed",
+                "description": "Customer confirms presence at address during scheduled delivery window.",
+                "original_prob": base_p,
+                "new_prob": p_opt5,
+                "risk_reduction_pct": round((drop_opt5 / (base_p + 1e-6)) * 100, 1),
+                "new_risk_tier": tier_opt5,
+                "cost": 0.05,
+                "cost_tier": "MINIMAL",
+                "drop": drop_opt5,
+                "rationale": "Proactive 1-click confirmation validates recipient presence before driver dispatch."
+            }
+        ]
+
+        urgency = 1.0 if base_p >= self.threshold_medium else 0.5
+        is_eligible = (base_p >= self.threshold_low)
+
+        best_opt_id = None
+        best_utility = -999.0
+
+        for cand in raw_candidates:
+            rel_drop = cand["drop"] / (base_p + 1e-6)
+            util = 0.60 * rel_drop + 0.25 * urgency - 0.15 * cand["cost"]
+
+            # Root-cause alignment bonus from SHAP risk factors
+            if cand["id"] in ("reschedule_day", "confirm_availability") and ("risk_preference_departure_clash" in risk_factors or mismatch_in_base == 1):
+                util += 0.10
+            if cand["id"] in ("access_point", "deliver_neighbor") and "risk_signature_unavailability" in risk_factors:
+                util += 0.10
+            if cand["id"] == "access_point" and (curr_access >= 4 or "risk_access_difficulty_heavy_package" in risk_factors):
+                util += 0.10
+
+            cand["utility_score"] = round(util, 3)
+
+            # hold_pickup is a passive customer counter pickup option, not an automated proactive dispatch recommendation
+            if is_eligible and cand["id"] != "hold_pickup" and cand["drop"] >= 0.02 and util >= 0.25:
+                if util > best_utility:
+                    best_utility = util
+                    best_opt_id = cand["id"]
+
+        options = []
+        for cand in raw_candidates:
+            is_rec = False
+            if is_eligible and cand["utility_score"] >= 0.25 and cand["drop"] >= 0.02:
+                if cand["id"] == best_opt_id:
+                    is_rec = True
+                elif cand["utility_score"] >= 0.50 and cand["id"] in ("access_point", "reschedule_day") and mismatch_in_base == 1:
+                    is_rec = True
+
+            options.append({
+                "id": cand["id"],
+                "title": cand["title"],
+                "description": cand["description"],
+                "original_prob": cand["original_prob"],
+                "new_prob": cand["new_prob"],
+                "risk_reduction_pct": cand["risk_reduction_pct"],
+                "new_risk_tier": cand["new_risk_tier"],
+                "recommended": is_rec,
+                "utility_score": cand["utility_score"],
+                "estimated_cost_tier": cand["cost_tier"],
+                "rationale": cand["rationale"],
+                "triggering_risk_drivers": [rf for rf in risk_factors if rf]
+            })
+
         return {
             "baseline_assessment": baseline_risk,
             "intervention_options": options

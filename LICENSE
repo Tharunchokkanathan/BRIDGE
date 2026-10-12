@@ -1,36 +1,57 @@
-MIT License
+PROPRIETARY AND CONFIDENTIAL SOFTWARE LICENSE
 
-Copyright (c) 2026 BRIDGE Project Contributors
+Copyright (c) 2026 Tharunchokkanathan & BRIDGE Project Contributors.
+All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+NOTICE TO USER:
+This software, source code, data pipelines, feature engineering specifications, 
+machine learning models, architectural designs, algorithms, trade secrets, and 
+associated documentation (collectively, the "Software") are strictly 
+PROPRIETARY and CONFIDENTIAL property of the copyright holders.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. PROHIBITION OF COPYING, CLONING, AND DISTRIBUTION:
+Unauthorized copying, cloning, forking, reproduction, mirroring, distribution, 
+sublicensing, transmission, dissemination, public display, or commercial 
+exploitation of this Software or any part thereof, via any medium, without 
+the express prior written consent of the copyright holders, is strictly 
+prohibited.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. PROHIBITION OF REVERSE ENGINEERING & DERIVATIVE WORKS:
+You may not decompile, reverse engineer, disassemble, extract the underlying 
+algorithms, train unauthorized derivative models, recreate system architectures, 
+or create derivative works based upon the Software.
+
+3. INTELLECTUAL PROPERTY RIGHTS:
+All title, ownership rights, patents, copyrights, trade secrets, and intellectual 
+property rights in and to the Software shall remain exclusively with the 
+copyright holders. This repository and Software do NOT grant any open-source, 
+public, or permissive rights.
+
+4. COMMERCIAL USE & COMPETITION PROTECTION:
+Any unauthorized commercial use, deployment in production networks, academic 
+appropriation, competition submission plagiarism, or unauthorized derivation 
+without an explicit, executed written license agreement is strictly prohibited 
+and subject to full civil liability and legal remedies under applicable law.
+
+5. DISCLAIMER OF WARRANTIES:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, 
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, 
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
 Third-Party Materials and Data Notice:
 ==============================================================================
-This MIT License applies solely to the original source code and documentation
-authored by the BRIDGE project contributors.
+This proprietary license applies solely to the original source code, architectural 
+designs, feature engineering engines, calibrated models, risk decision engines, 
+and documentation authored by the BRIDGE project contributors.
 
-This license does NOT apply to third-party datasets or materials referenced,
-analyzed, or ingested by this project, specifically the Amazon Last Mile Routing
-Research Challenge dataset. The Amazon Last Mile Routing Research Challenge
-material is third-party material, is NOT owned by the BRIDGE project, and is
-governed by its own separate license (Creative Commons Attribution-NonCommercial
-4.0 International Public License, CC BY-NC 4.0).
-
-See THIRD_PARTY_LICENSES.md for full third-party attributions and license terms.
+This license does NOT claim ownership over third-party materials or dependencies:
+- The Amazon Last Mile Routing Research Challenge dataset is third-party material 
+  and is governed by the Creative Commons Attribution-NonCommercial 4.0 
+  International Public License (CC BY-NC 4.0).
+- Open-source third-party dependencies (including FastAPI, Scikit-Learn, LightGBM, 
+  DuckDB, SHAP, etc.) remain subject to their respective open-source licenses as 
+  documented in THIRD_PARTY_LICENSES.md.
