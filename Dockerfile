@@ -16,13 +16,18 @@ FROM python:3.11-slim AS runner
 
 WORKDIR /app
 
-# Create non-root user for enterprise container security compliance
-RUN groupadd -r bridgeuser && useradd -r -g bridgeuser bridgeuser
+# Install runtime OpenMP support for LightGBM and create non-root user
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r bridgeuser && useradd -r -g bridgeuser bridgeuser
 
 # Copy installed Python packages from builder
 COPY --from=builder /root/.local /home/bridgeuser/.local
 ENV PATH=/home/bridgeuser/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
+ENV HOST=0.0.0.0
+ENV PORT=8000
 
 # Copy application source code and models
 COPY --chown=bridgeuser:bridgeuser app/ ./app/
