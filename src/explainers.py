@@ -150,6 +150,7 @@ class LinearExplainerChampion(BaseExplainer):
         self.base_value = float(self.cal_slope * (np.dot(self.weights, self.x_bar) + self.intercept) + self.cal_intercept)
         # Precompute effective calibrated weights: w_cal = A * w
         self.cal_weights = self.cal_slope * self.weights
+        self.explainer_type = "linear_exact"
 
     def get_base_value(self) -> float:
         return self.base_value
@@ -218,6 +219,7 @@ class LinearExplainerChampion(BaseExplainer):
                 "feature_name": name,
                 "pillar": pillar,
                 "attribution_score": round(score, 4),
+                "shap_logit": round(score, 4),
                 "risk_driver_share": share,
                 "direction": "INCREASES_RISK",
                 "explained_space": self.get_explained_space()
@@ -236,6 +238,7 @@ class LinearExplainerChampion(BaseExplainer):
                 "feature_name": name,
                 "pillar": pillar,
                 "attribution_score": round(score, 4),
+                "shap_logit": round(score, 4),
                 "direction": "DECREASES_RISK",
                 "explained_space": self.get_explained_space()
             })
@@ -246,9 +249,14 @@ class LinearExplainerChampion(BaseExplainer):
             "explainer_type": "linear_exact",
             "explained_space": self.get_explained_space(),
             "base_value_log_odds": round(self.base_value, 4),
+            "base_value": round(self.base_value, 4),
             "baseline_probability": round(float(1.0 / (1.0 + np.exp(-self.base_value))), 4),
+            "baseline_probability_at_mean_features": round(float(1.0 / (1.0 + np.exp(-self.base_value))), 4),
+            "fleet_mean_calibrated_probability": round(float(1.0 / (1.0 + np.exp(-self.base_value))), 4),
+            "predicted_log_odds": round(cal_margin, 4),
             "total_positive_attribution_mass": round(total_positive_mass, 4),
             "local_accuracy_error": round(additivity_error, 12),
+            "additivity_error": round(additivity_error, 12),
             "explanation_status": status
         }
         
@@ -283,6 +291,7 @@ class TreeExplainerCandidate(BaseExplainer):
             self.cal_intercept = 0.0
             
         self.base_value = float(self.cal_slope * self.raw_base_value + self.cal_intercept)
+        self.explainer_type = "tree_shap"
 
     def get_base_value(self) -> float:
         return self.base_value
@@ -336,6 +345,7 @@ class TreeExplainerCandidate(BaseExplainer):
                 "feature_name": name,
                 "pillar": pillar,
                 "attribution_score": round(score, 4),
+                "shap_logit": round(score, 4),
                 "risk_driver_share": share,
                 "direction": "INCREASES_RISK",
                 "explained_space": self.get_explained_space()
@@ -353,6 +363,7 @@ class TreeExplainerCandidate(BaseExplainer):
                 "feature_name": name,
                 "pillar": pillar,
                 "attribution_score": round(score, 4),
+                "shap_logit": round(score, 4),
                 "direction": "DECREASES_RISK",
                 "explained_space": self.get_explained_space()
             })
@@ -363,9 +374,14 @@ class TreeExplainerCandidate(BaseExplainer):
             "explainer_type": "tree_shap",
             "explained_space": self.get_explained_space(),
             "base_value_log_odds": round(self.base_value, 4),
+            "base_value": round(self.base_value, 4),
             "baseline_probability": round(float(1.0 / (1.0 + np.exp(-self.base_value))), 4),
+            "baseline_probability_at_mean_features": round(float(1.0 / (1.0 + np.exp(-self.base_value))), 4),
+            "fleet_mean_calibrated_probability": round(float(1.0 / (1.0 + np.exp(-self.base_value))), 4),
+            "predicted_log_odds": round(cal_margin, 4),
             "total_positive_attribution_mass": round(total_positive_mass, 4),
             "local_accuracy_error": round(additivity_error, 8),
+            "additivity_error": round(additivity_error, 8),
             "explanation_status": status
         }
         

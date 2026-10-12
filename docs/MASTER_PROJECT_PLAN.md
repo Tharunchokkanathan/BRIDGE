@@ -209,18 +209,20 @@ Phase 4 [API Integration] ──► Phase 5 [Interventions & Routing] ──► 
 
 ---
 
-### Phase 4 — API & Model-Serving Integration
+### Phase 4 — API & Model-Serving Integration [COMPLETED & VERIFIED]
 * **Prerequisites:** Phase 3.5 approved by user.
 * **Existing Files to Reuse:** `app/server.py`, `tests/test_api.py`.
 * **Deliverables:**
-  * `app/server.py`: Expose calibrated failure probability, validated risk tiers, and TreeSHAP root causes across `/api/predict` and `/api/intervene/simulate`.
-  * `tests/test_api.py`: Updated integration tests for Pydantic schema validation.
+  * `app/server.py`: Expose calibrated failure probability, validated risk tiers, and SHAP explainability across `/api/predict` and `/api/intervene/simulate`; batch fleet scoring with 20% capacity cap across `/api/predict/batch`; bidirectional model switching in `/api/model/switch`.
+  * `tests/test_api.py`: Updated integration tests for Pydantic schema validation, capacity constraints, and model switching.
 * **Acceptance Criteria:**
-  1. All 6 API tests pass with status code 200.
-  2. `/api/predict` response includes calibrated probability, badge color, and Top-3 TreeSHAP factors.
+  1. All 8 API integration tests pass with status code 200.
+  2. `/api/predict` response includes calibrated probability, badge color, SHAP attributions, and explainability metadata.
+  3. `/api/predict/batch` enforces the 20% vehicle capacity limit and preserves shipment order.
+  4. Safe model switching between Champion and Candidate verified with guaranteed Champion restoration.
 * **Rollback Steps:**
   1. Revert `app/server.py` and `tests/test_api.py` via `git checkout`.
-* **Approval Gate:** **User verification of live API responses required before Phase 5.**
+* **Approval Gate:** **Phase 4 implementation complete and verified (58/58 tests passing). User authorization activates Phase 5.**
 
 ---
 

@@ -188,19 +188,19 @@
     {
       "phase_id": "P4",
       "phase_name": "Phase 4 — API and Model-Serving Integration",
-      "status": "NOT STARTED",
+      "status": "TESTED",
       "tasks": [
         {
           "task_id": "TASK-P4-01",
-          "description": "Update FastAPI endpoints to serve calibrated predictions, risk tiers, and TreeSHAP root causes.",
-          "status": "NOT STARTED",
+          "description": "Update FastAPI endpoints to serve calibrated predictions, risk tiers, fleet-capacity decisions, and SHAP explainability with live model switching.",
+          "status": "TESTED",
           "dependencies": ["TASK-P3.5-01"],
-          "files_involved": ["app/server.py", "tests/test_api.py"],
-          "acceptance_criteria": "/api/predict and /api/intervene/simulate return structured responses with status 200; all API integration tests pass.",
-          "rollback_steps": "git checkout app/server.py tests/test_api.py.",
-          "test_evidence": null,
-          "blocking_issues": "Requires Phase 3.5 Completion",
-          "approval_status": "PENDING_APPROVAL"
+          "files_involved": ["app/server.py", "tests/test_api.py", "static/index.html"],
+          "acceptance_criteria": "/api/predict, /api/predict/batch, and /api/intervene/simulate return structured responses with status 200; 20% fleet capacity cap enforced with order preservation; safe model switching between Champion and Candidate verified; all 8 API integration tests and 58/58 regression tests pass.",
+          "rollback_steps": "git checkout app/server.py tests/test_api.py static/index.html.",
+          "test_evidence": "All 8 API integration tests in tests/test_api.py passed in 20.66s. Verified calibrated failure probability, badge colors, SHAP attributions and metadata, batch ranking with 20% fleet capacity cap (DEFERRED_DUE_TO_FLEET_CAPACITY), input order preservation, and bidirectional model switching between Champion Logistic Regression (Linear SHAP) and Candidate LightGBM (TreeSHAP) with guaranteed Champion restoration. Full regression suite passed 58/58 tests in 48.88s.",
+          "blocking_issues": null,
+          "approval_status": "IMPLEMENTED_AND_TESTED"
         }
       ]
     },

@@ -3,7 +3,7 @@ import sys
 import json
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,7 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Risk Engine
+# Initialize Risk Engine (defaults to Champion: Logistic Regression)
 ENGINE = RiskEngine(model_dir=os.path.join(os.path.dirname(__file__), "..", "models"))
 
 # Cache sample deliveries for quick UI exploration & seed to database
@@ -39,10 +39,16 @@ SAMPLE_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "sample_test
 SAMPLE_DELIVERIES = []
 if os.path.exists(SAMPLE_FILE):
     raw_df = pd.read_csv(SAMPLE_FILE)
+    raw_records = []
     for idx, row in raw_df.iterrows():
         rec = row.to_dict()
         clean_rec = {k: (None if pd.isna(v) else v) for k, v in rec.items()}
-        clean_rec["prediction"] = ENGINE.predict_risk(rec)
+        raw_records.append(clean_rec)
+    
+    # Score batch with operational capacity constraint (20% fleet cap)
+    batch_predictions = ENGINE.apply_capacity_constrained_policy(raw_records)
+    for idx, clean_rec in enumerate(raw_records):
+        clean_rec["prediction"] = batch_predictions[idx]
         SAMPLE_DELIVERIES.append(clean_rec)
         # Seed to database
         db.save_shipment(clean_rec)
@@ -52,6 +58,10 @@ SAMPLE_DELIVERIES.sort(key=lambda x: x["prediction"]["failure_probability"], rev
 
 class PredictRequest(BaseModel):
     shipment: Dict[str, Any]
+
+class BatchPredictRequest(BaseModel):
+    shipments: List[Dict[str, Any]]
+    max_capacity_rate: Optional[float] = None
 
 class SwitchModelRequest(BaseModel):
     model_name: str
@@ -70,12 +80,25 @@ class CompleteDeliveryRequest(BaseModel):
 
 @app.get("/api/health")
 def health_check():
+    available_models = ["Logistic Regression", "Random Forest"]
+    if ENGINE.lgb_model is not None:
+        available_models.append("LightGBM Candidate")
+
     return {
         "status": "healthy",
         "active_model": ENGINE.active_model_name,
+        "champion_model": ENGINE.champion_name,
+        "is_champion_active": bool(ENGINE.active_model_name == ENGINE.champion_name),
         "sample_count": len(SAMPLE_DELIVERIES),
         "database": db.get_status(),
-        "available_models": ["Logistic Regression", "Random Forest"]
+        "available_models": available_models,
+        "calibrated": bool(ENGINE.active_calibrator is not None),
+        "explainer_type": ENGINE.active_explainer.explainer_type if ENGINE.active_explainer else "heuristic_fallback",
+        "operational_thresholds": {
+            "tau_low": ENGINE.threshold_low,
+            "tau_med": ENGINE.threshold_medium,
+            "max_fleet_capacity": ENGINE.max_capacity_rate
+        }
     }
 
 @app.get("/api/database/status")
@@ -91,11 +114,29 @@ def get_model_metadata():
 def switch_model(req: SwitchModelRequest):
     success = ENGINE.set_active_model(req.model_name)
     if not success:
-        raise HTTPException(status_code=400, detail="Invalid model name. Choose 'Logistic Regression' or 'Random Forest'.")
-    for item in SAMPLE_DELIVERIES:
-        item["prediction"] = ENGINE.predict_risk(item)
+        available = ["Logistic Regression", "Random Forest"]
+        if ENGINE.lgb_model is not None:
+            available.append("LightGBM Candidate")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model name '{req.model_name}'. Choose from: {available}."
+        )
+    
+    # Re-evaluate sample deliveries with newly active model under fleet capacity policy
+    raw_records = [{k: v for k, v in item.items() if k != "prediction"} for item in SAMPLE_DELIVERIES]
+    batch_predictions = ENGINE.apply_capacity_constrained_policy(raw_records)
+    for idx, item in enumerate(SAMPLE_DELIVERIES):
+        item["prediction"] = batch_predictions[idx]
     SAMPLE_DELIVERIES.sort(key=lambda x: x["prediction"]["failure_probability"], reverse=True)
-    return {"message": f"Active model changed to {req.model_name}", "active_model": req.model_name}
+    
+    return {
+        "message": f"Active model changed to {req.model_name}",
+        "active_model": req.model_name,
+        "champion_model": ENGINE.champion_name,
+        "is_champion_active": bool(ENGINE.active_model_name == ENGINE.champion_name),
+        "calibrated": bool(ENGINE.active_calibrator is not None),
+        "explainer_type": ENGINE.active_explainer.explainer_type if ENGINE.active_explainer else "heuristic_fallback"
+    }
 
 @app.get("/api/shipments/sample")
 def get_sample_shipments():
@@ -109,6 +150,41 @@ def predict_shipment_risk(req: PredictRequest):
     try:
         result = ENGINE.predict_risk(req.shipment)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/predict/batch")
+def predict_batch_shipments(req: BatchPredictRequest):
+    """
+    Evaluates an entire batch of shipment deliveries, applies calibrated failure probabilities,
+    computes SHAP explainability, and enforces the 20% fleet capacity allocation policy
+    with deterministic tie-breaking while strictly preserving original input ordering.
+    """
+    try:
+        if not req.shipments:
+            return {
+                "count": 0,
+                "capacity_approved_count": 0,
+                "capacity_deferred_count": 0,
+                "fleet_capacity_limit_pct": round((req.max_capacity_rate if req.max_capacity_rate is not None else ENGINE.max_capacity_rate) * 100, 1),
+                "predictions": []
+            }
+        
+        predictions = ENGINE.apply_capacity_constrained_policy(
+            req.shipments,
+            max_capacity_rate=req.max_capacity_rate
+        )
+        approved_count = sum(1 for p in predictions if p.get("capacity_approved") is True)
+        deferred_count = sum(1 for p in predictions if p.get("capacity_status") == "DEFERRED_DUE_TO_FLEET_CAPACITY")
+        cap_rate = req.max_capacity_rate if req.max_capacity_rate is not None else ENGINE.max_capacity_rate
+        
+        return {
+            "count": len(predictions),
+            "capacity_approved_count": approved_count,
+            "capacity_deferred_count": deferred_count,
+            "fleet_capacity_limit_pct": round(cap_rate * 100, 1),
+            "predictions": predictions
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -207,6 +283,9 @@ def get_dashboard_stats():
     med_risk_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"]["risk_tier"] == "MEDIUM")
     low_risk_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"]["risk_tier"] == "LOW")
 
+    capacity_approved_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"].get("capacity_approved") is True)
+    capacity_deferred_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"].get("capacity_status") == "DEFERRED_DUE_TO_FLEET_CAPACITY")
+
     baseline_success_rate = 82.4
     projected_post_intervention_success = 94.6
     relative_reduction_in_failures = round(
@@ -218,6 +297,8 @@ def get_dashboard_stats():
         "high_risk_count": high_risk_count,
         "medium_risk_count": med_risk_count,
         "low_risk_count": low_risk_count,
+        "capacity_approved_count": capacity_approved_count,
+        "capacity_deferred_count": capacity_deferred_count,
         "baseline_success_rate": baseline_success_rate,
         "optimized_success_rate": projected_post_intervention_success,
         "success_rate_improvement_points": round(projected_post_intervention_success - baseline_success_rate, 1),
@@ -225,6 +306,16 @@ def get_dashboard_stats():
         "estimated_fuel_savings_pct": 18.2,
         "driver_labor_hours_saved_pct": 15.5,
         "customer_satisfaction_boost_pct": 24.0,
+        "active_model": ENGINE.active_model_name,
+        "champion_model": ENGINE.champion_name,
+        "is_champion_active": bool(ENGINE.active_model_name == ENGINE.champion_name),
+        "calibrated": bool(ENGINE.active_calibrator is not None),
+        "explainer_type": ENGINE.active_explainer.explainer_type if ENGINE.active_explainer else "heuristic_fallback",
+        "operational_thresholds": {
+            "tau_low": ENGINE.threshold_low,
+            "tau_med": ENGINE.threshold_medium,
+            "max_fleet_capacity": ENGINE.max_capacity_rate
+        },
         "database_status": db.get_status()
     }
 
