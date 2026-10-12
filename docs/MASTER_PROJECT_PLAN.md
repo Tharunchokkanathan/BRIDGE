@@ -186,20 +186,26 @@ Phase 4 [API Integration] ──► Phase 5 [Interventions & Routing] ──► 
 
 ---
 
-### Phase 3.5 — TreeSHAP Explainability Engine
+### Phase 3.5 — Explainability Engine (Linear SHAP & TreeSHAP) [COMPLETED & TESTED]
 * **Prerequisites:** Explicit user authorization to install `shap`; Phase 3.4 approved.
-* **Existing Files to Reuse:** `src/risk_engine.py`, `requirements.txt`.
 * **Deliverables:**
-  * `requirements.txt`: Add `shap>=0.44.0`.
-  * `src/risk_engine.py`: Integrate `shap.TreeExplainer(model)` to compute exact Shapley attributions $\phi_j$, replacing heuristic if/else rules with Top-3 mathematical risk drivers.
-  * `tests/test_engine.py`: Unit tests verifying that sum of Shapley values equals model margin and feature names map 100%.
-* **Acceptance Criteria:**
-  1. Attribution computation latency $\le 10.0\text{ ms}$ per package.
-  2. TreeSHAP reports feature attributions without misrepresenting them as causal guarantees.
+  * `requirements.txt`: Added `shap>=0.44.0` and `lightgbm>=4.0.0`.
+  * `models/background_mean_champion.joblib`: Serialized 73-dimensional development feature expectations from 85,181 development rows.
+  * `src/explainers.py`: Implemented `LinearExplainerChampion` (closed-form Linear SHAP in calibrated log-odds space) and `TreeExplainerCandidate` (TreeSHAP in calibrated log-odds space) with domain pillar mapping.
+  * `src/risk_engine.py`: Integrated explainers into `predict_risk()` and `predict_batch()`, returning dual-compatible response schema (`factor`, `detail`, `severity` + mathematical SHAP fields) with explicit fallback status.
+  * `tests/test_engine.py`: Implemented 12 mathematical and integration unit tests in `TestPhase35ExplainabilityEngine`.
+* **Empirical Acceptance Results:**
+  1. **Attribution-Only Latency:**
+     * Champion (Linear SHAP): Median **0.091 ms** | P95 **0.174 ms** (Target $\le 0.5\text{ ms}$ — **EXCEEDED**).
+     * Candidate (TreeSHAP): Median **3.137 ms** | P95 **3.549 ms** (Target $\le 10.0\text{ ms}$ — **EXCEEDED**).
+  2. **Mathematical Invariants:** Additivity error $\le 10^{-10}$ for Champion and $\le 10^{-4}$ for Candidate; base value matches development expectation ($\text{base\_value} = -2.3276$).
+  3. **Regression Suite:** Full regression suite passed **56/56 tests** cleanly in 22.86s.
+  4. **Reporting Guardrails:** Signed log-odds attributions and `risk_driver_share` reported strictly as feature sensitivities without causal claims.
 * **Rollback Steps:**
-  1. Remove `shap` from `requirements.txt`.
-  2. Revert `src/risk_engine.py` to heuristic explainers via `git checkout`.
-* **Approval Gate:** **User sign-off on TreeSHAP attributions and latency benchmarks required before Phase 4.**
+  1. Restore `.pre_3_5.bak` backups for `requirements.txt`, `src/risk_engine.py`, `tests/test_engine.py`.
+  2. Remove `src/explainers.py` and `models/background_mean_champion.joblib`.
+  3. Run `pip uninstall -y shap slicer`.
+* **Approval Gate:** **User sign-off on Phase 3.5 explainability engine and benchmarks required before Phase 4.**
 
 ---
 

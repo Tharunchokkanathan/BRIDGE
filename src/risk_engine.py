@@ -59,6 +59,31 @@ class RiskEngine:
         self.threshold_medium = float(op_thresh.get("tau_med", THRESHOLD_MEDIUM))
         self.max_capacity_rate = float(op_thresh.get("max_fleet_capacity", 0.20))
 
+        # Load background expectation artifact for Champion Linear SHAP
+        self.background_mean_payload = None
+        bg_path = os.path.join(model_dir, "background_mean_champion.joblib")
+        if os.path.exists(bg_path):
+            try:
+                self.background_mean_payload = joblib.load(bg_path)
+            except Exception as e:
+                print(f"[RiskEngine Warning] Could not load background mean payload: {e}")
+
+        # Initialize explainers
+        self.champion_explainer = None
+        if self.background_mean_payload is not None:
+            try:
+                from explainers import LinearExplainerChampion
+                self.champion_explainer = LinearExplainerChampion(
+                    self.lr_model,
+                    self.background_mean_payload,
+                    self.calibrator_champion
+                )
+            except Exception as e:
+                print(f"[RiskEngine Warning] Could not initialize Champion LinearExplainer: {e}")
+
+        self.candidate_explainer = None
+        self.active_explainer = None
+
         self.active_model_name = self.champion_name
         self._update_active_model()
         print(f"[RiskEngine Initialized] Active model: {self.active_model_name} (Thresholds: Low={self.threshold_low}, Med={self.threshold_medium})")
@@ -87,14 +112,29 @@ class RiskEngine:
             self.model = self.lr_model
             self.active_prep = self.scaled_preprocessor
             self.active_calibrator = self.calibrator_champion
+            self.active_explainer = self.champion_explainer
         elif self.active_model_name in ["LightGBM Candidate", "LightGBM"]:
             self.model = self.lgb_model
             self.active_prep = self.preprocessor
             self.active_calibrator = self.calibrator_candidate
+            if self.candidate_explainer is None and self.lgb_model is not None:
+                try:
+                    from explainers import TreeExplainerCandidate
+                    feat_names = self.background_mean_payload["feature_names"] if self.background_mean_payload else None
+                    if feat_names is not None:
+                        self.candidate_explainer = TreeExplainerCandidate(
+                            self.lgb_model,
+                            feat_names,
+                            self.calibrator_candidate
+                        )
+                except Exception as e:
+                    print(f"[RiskEngine Warning] Could not initialize Candidate TreeExplainer: {e}")
+            self.active_explainer = self.candidate_explainer
         else:
             self.model = self.rf_model
             self.active_prep = self.preprocessor
             self.active_calibrator = None
+            self.active_explainer = None
 
     def _format_input_df(self, record):
         """Ensures input dictionary or series matches feature column format."""
@@ -164,9 +204,33 @@ class RiskEngine:
         # Categorize into Risk Tier using centralized banding
         band_info = self._assign_risk_band(prob)
 
-        # Identify key risk factors for transparency
-        risk_factors = self._extract_risk_factors(df_input.iloc[0], prob)
-        
+        # Identify key risk factors and explainability diagnostics
+        risk_factors = []
+        mitigating_factors = []
+        explainability_meta = {
+            "explainer_type": "heuristic_fallback",
+            "explained_space": "heuristic_rule_space",
+            "explanation_status": "EXPLAINER_UNAVAILABLE_HEURISTIC"
+        }
+
+        if self.active_explainer is not None:
+            try:
+                rf, mf, meta = self.active_explainer.explain(X_proc, top_k=5)
+                risk_factors = rf
+                mitigating_factors = mf
+                explainability_meta = meta
+            except Exception as e:
+                # Explicit fallback: never silently disguise heuristic as SHAP
+                explainability_meta = {
+                    "explainer_type": "heuristic_fallback",
+                    "explained_space": "heuristic_rule_space",
+                    "explanation_status": f"FAILED_FALLBACK_HEURISTIC: {str(e)}"
+                }
+                risk_factors = self._extract_risk_factors(df_input.iloc[0], prob)
+        else:
+            # Fallback to domain heuristics if explainer is unavailable (e.g. Random Forest benchmark)
+            risk_factors = self._extract_risk_factors(df_input.iloc[0], prob)
+
         return {
             "failure_probability": round(prob, 4),
             "raw_probability": round(raw_prob, 4),
@@ -175,6 +239,8 @@ class RiskEngine:
             "badge_color": band_info["badge_color"],
             "recommended_action": band_info["recommended_action"],
             "risk_factors": risk_factors,
+            "mitigating_factors": mitigating_factors,
+            "explainability_metadata": explainability_meta,
             "model_used": self.active_model_name,
             "calibrated": bool(self.active_calibrator is not None)
         }

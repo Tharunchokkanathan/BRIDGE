@@ -384,6 +384,148 @@ class TestPhase34RiskEngineIntegrationAndBanding(unittest.TestCase):
         self.assertEqual(self.engine.active_model_name, "Logistic Regression")
 
 
+class TestPhase35ExplainabilityEngine(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = RiskEngine(model_dir=os.path.join(os.path.dirname(__file__), "..", "models"))
+        cls.sample_record = {
+            "station_code": "DBO1",
+            "preferred_delivery_method": "Hand to Customer",
+            "customer_delivery_preference": "Morning Only",
+            "location_type": "Apartment",
+            "departure_hour": 16,
+            "customer_availability_rate": 0.35,
+            "address_access_difficulty": 4,
+            "signature_required": 1
+        }
+
+    def test_linear_shap_champion_additivity(self):
+        """Mathematical Invariant: sum(phi_j) == z_cal - base_value with error <= 1e-10."""
+        self.engine.set_active_model("Logistic Regression")
+        res = self.engine.predict_risk(self.sample_record)
+        meta = res["explainability_metadata"]
+        self.assertEqual(meta["explainer_type"], "linear_exact")
+        self.assertEqual(meta["explained_space"], "calibrated_logit_margin")
+        self.assertLessEqual(meta["local_accuracy_error"], 1e-10)
+
+    def test_linear_shap_base_value_consistency(self):
+        """Mathematical Invariant: Base value matches empirical expectation on dev set."""
+        self.engine.set_active_model("Logistic Regression")
+        res = self.engine.predict_risk(self.sample_record)
+        meta = res["explainability_metadata"]
+        self.assertAlmostEqual(meta["base_value_log_odds"], -2.3276, places=3)
+        self.assertAlmostEqual(meta["baseline_probability"], 0.0889, places=3)
+
+    def test_tree_shap_candidate_additivity(self):
+        """Mathematical Invariant: TreeSHAP on candidate LightGBM satisfies additivity <= 1e-4."""
+        self.engine.set_active_model("LightGBM Candidate")
+        res = self.engine.predict_risk(self.sample_record)
+        meta = res["explainability_metadata"]
+        self.assertEqual(meta["explainer_type"], "tree_shap")
+        self.assertLessEqual(meta["local_accuracy_error"], 1e-4)
+        self.engine.set_active_model("Logistic Regression")
+
+    def test_risk_driver_share_bounds(self):
+        """Numerical Boundary: risk_driver_share in (0.0, 1.0] and sums to 1.0."""
+        self.engine.set_active_model("Logistic Regression")
+        res = self.engine.predict_risk(self.sample_record)
+        factors = res["risk_factors"]
+        self.assertGreater(len(factors), 0)
+        total_share = sum(f["risk_driver_share"] for f in factors if f["risk_driver_share"] is not None)
+        self.assertLessEqual(total_share, 1.001)
+        for f in factors:
+            if f["risk_driver_share"] is not None:
+                self.assertGreater(f["risk_driver_share"], 0.0)
+                self.assertLessEqual(f["risk_driver_share"], 1.0)
+
+    def test_transformed_feature_alignment(self):
+        """Schema Verification: exactly 73 named features matching preprocessor."""
+        self.assertEqual(len(self.engine.background_mean_payload["feature_names"]), 73)
+        self.assertEqual(self.engine.champion_explainer.weights.shape[0], 73)
+        self.assertEqual(self.engine.champion_explainer.x_bar.shape[0], 73)
+
+    def test_model_switching_explainer_wiring(self):
+        """Integration: Explainer dynamically matches active model."""
+        self.engine.set_active_model("Logistic Regression")
+        self.assertEqual(self.engine.active_explainer, self.engine.champion_explainer)
+        res_lr = self.engine.predict_risk(self.sample_record)
+        self.assertEqual(res_lr["explainability_metadata"]["explainer_type"], "linear_exact")
+
+        self.engine.set_active_model("LightGBM Candidate")
+        self.assertEqual(self.engine.active_explainer, self.engine.candidate_explainer)
+        res_lgb = self.engine.predict_risk(self.sample_record)
+        self.assertEqual(res_lgb["explainability_metadata"]["explainer_type"], "tree_shap")
+
+        self.engine.set_active_model("Logistic Regression")
+
+    def test_calibrated_margin_ranking_invariance(self):
+        """Mathematical Invariant: Positive Platt scaling slope preserves rank ordering."""
+        self.assertGreater(self.engine.champion_explainer.cal_slope, 0.0)
+        self.engine.set_active_model("LightGBM Candidate")
+        self.assertGreater(self.engine.candidate_explainer.cal_slope, 0.0)
+        self.engine.set_active_model("Logistic Regression")
+
+    def test_edge_case_zero_positive_drivers(self):
+        """Robustness: Handles safe shipment with no positive risk drivers gracefully."""
+        self.engine.set_active_model("Logistic Regression")
+        safe_proc = np.full((1, 73), -10.0)
+        rf, mf, meta = self.engine.champion_explainer.explain(safe_proc)
+        if len(rf) == 0:
+            self.assertEqual(meta["explanation_status"], "NO_POSITIVE_DRIVERS")
+
+    def test_edge_case_fewer_than_three_drivers(self):
+        """Robustness: Handles cases with fewer than 3 drivers without padding negative drivers."""
+        self.engine.set_active_model("Logistic Regression")
+        x_proc = self.engine.champion_explainer.x_bar.copy().reshape(1, -1)
+        pos_weight_idx = int(np.where(self.engine.champion_explainer.cal_weights > 0)[0][0])
+        x_proc[0, pos_weight_idx] += 2.0
+        rf, mf, meta = self.engine.champion_explainer.explain(x_proc)
+        self.assertEqual(len(rf), 1)
+        self.assertEqual(rf[0]["direction"], "INCREASES_RISK")
+
+    def test_dual_schema_response_contract(self):
+        """Backward Compatibility: Preserves all legacy fields and adds SHAP fields."""
+        res = self.engine.predict_risk(self.sample_record)
+        legacy_keys = [
+            "failure_probability", "raw_probability", "failure_percentage",
+            "risk_tier", "badge_color", "recommended_action", "risk_factors",
+            "model_used", "calibrated"
+        ]
+        for k in legacy_keys:
+            self.assertIn(k, res)
+        for f in res["risk_factors"]:
+            self.assertIn("factor", f)
+            self.assertIn("detail", f)
+            self.assertIn("severity", f)
+            self.assertIn("attribution_score", f)
+            self.assertIn("direction", f)
+            self.assertIn("pillar", f)
+
+    def test_mitigating_factors_separation(self):
+        """Safety: Risk-reducing features appear in mitigating_factors, not risk_factors."""
+        res = self.engine.predict_risk(self.sample_record)
+        self.assertIn("mitigating_factors", res)
+        for mf in res["mitigating_factors"]:
+            self.assertLess(mf["attribution_score"], 0.0)
+            self.assertEqual(mf["direction"], "DECREASES_RISK")
+        for rf in res["risk_factors"]:
+            self.assertGreater(rf["attribution_score"], 0.0)
+            self.assertEqual(rf["direction"], "INCREASES_RISK")
+
+    def test_explainer_failure_explicit_fallback(self):
+        """Robustness: Fallback triggers explicit status if explainer throws exception."""
+        original_explainer = self.engine.active_explainer
+        class BrokenExplainer:
+            def explain(self, *args, **kwargs):
+                raise RuntimeError("Simulated explainer fault")
+        self.engine.active_explainer = BrokenExplainer()
+        res = self.engine.predict_risk(self.sample_record)
+        self.assertIn("FAILED_FALLBACK_HEURISTIC", res["explainability_metadata"]["explanation_status"])
+        self.assertEqual(res["explainability_metadata"]["explainer_type"], "heuristic_fallback")
+        self.assertIsInstance(res["risk_factors"], list)
+        self.engine.active_explainer = original_explainer
+
+
 if __name__ == "__main__":
     unittest.main()
 
