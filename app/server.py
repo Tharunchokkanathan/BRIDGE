@@ -1,10 +1,14 @@
 import os
 import sys
+import io
 import json
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional, List
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, Header, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,6 +21,12 @@ from risk_engine import RiskEngine
 from route_optimizer import RouteOptimizer
 from messaging import MessageDispatcher
 from database import db
+from manifest_state import (
+    ManifestStateManager,
+    ManifestParser,
+    score_manifest_records,
+    MAX_SYNC_ROWS
+)
 
 app = FastAPI(
     title="BRIDGE — AI-Powered First Attempt Delivery Success Engine",
@@ -38,26 +48,55 @@ ENGINE = RiskEngine(model_dir=os.path.join(os.path.dirname(__file__), "..", "mod
 ROUTE_OPTIMIZER = RouteOptimizer()
 MESSAGE_DISPATCHER = MessageDispatcher()
 
-# Cache sample deliveries for quick UI exploration & seed to database
+# Canonical benchmark sample delivery file
 SAMPLE_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "sample_test_deliveries.csv")
-SAMPLE_DELIVERIES = []
-if os.path.exists(SAMPLE_FILE):
-    raw_df = pd.read_csv(SAMPLE_FILE)
-    raw_records = []
-    for idx, row in raw_df.iterrows():
-        rec = row.to_dict()
-        clean_rec = {k: (None if pd.isna(v) else v) for k, v in rec.items()}
-        raw_records.append(clean_rec)
-    
-    # Score batch with operational capacity constraint (20% fleet cap)
-    batch_predictions = ENGINE.apply_capacity_constrained_policy(raw_records)
-    for idx, clean_rec in enumerate(raw_records):
-        clean_rec["prediction"] = batch_predictions[idx]
-        SAMPLE_DELIVERIES.append(clean_rec)
-        # Seed to database
-        db.save_shipment(clean_rec)
 
-SAMPLE_DELIVERIES.sort(key=lambda x: x["prediction"]["failure_probability"], reverse=True)
+# Dynamic SaaS Manifest State Manager (seeded to database upon benchmark load)
+MANIFEST_STATE = ManifestStateManager(sample_file=SAMPLE_FILE, engine=ENGINE, db=db)
+SAMPLE_DELIVERIES = MANIFEST_STATE.get_active_shipments()
+
+
+async def verify_api_key(
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key")
+):
+    """
+    Security dependency for SaaS API endpoints.
+    - Configurable via BRIDGE_API_KEY in environment.
+    - If not configured, permits open access (demo / hackathon mode).
+    - Allows public demo key ('demo-sandbox-key') and same-origin browser calls.
+    - Enforces 401 Unauthorized on invalid or missing key when configured.
+    """
+    expected_key = os.getenv("BRIDGE_API_KEY", "").strip()
+    if not expected_key:
+        return True
+
+    # 1. Allow public demo sandbox key
+    if x_api_key == "demo-sandbox-key":
+        return True
+
+    # 2. Allow same-origin browser calls
+    sec_fetch_site = request.headers.get("sec-fetch-site", "").lower()
+    if sec_fetch_site in ["same-origin", "same-site"]:
+        return True
+
+    host = request.headers.get("host")
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+    if host:
+        if origin and host in origin:
+            return True
+        if referer and host in referer:
+            return True
+
+    # 3. Match configured secret key
+    if x_api_key and x_api_key == expected_key:
+        return True
+
+    raise HTTPException(
+        status_code=401,
+        detail="Unauthorized: Invalid or missing API key. Provide valid X-API-Key header or use 'demo-sandbox-key'."
+    )
 
 
 class PredictRequest(BaseModel):
@@ -102,12 +141,16 @@ def health_check():
     if ENGINE.lgb_model is not None:
         available_models.append("LightGBM Candidate")
 
+    active_shipments = MANIFEST_STATE.get_active_shipments()
+    meta = MANIFEST_STATE.get_metadata()
+
     return {
         "status": "healthy",
         "active_model": ENGINE.active_model_name,
         "champion_model": ENGINE.champion_name,
         "is_champion_active": bool(ENGINE.active_model_name == ENGINE.champion_name),
-        "sample_count": len(SAMPLE_DELIVERIES),
+        "sample_count": len(active_shipments),
+        "manifest_id": meta.get("manifest_id", "benchmark-canonical-manifest"),
         "database": db.get_status(),
         "available_models": available_models,
         "calibrated": bool(ENGINE.active_calibrator is not None),
@@ -140,12 +183,10 @@ def switch_model(req: SwitchModelRequest):
             detail=f"Invalid model name '{req.model_name}'. Choose from: {available}."
         )
     
-    # Re-evaluate sample deliveries with newly active model under fleet capacity policy
-    raw_records = [{k: v for k, v in item.items() if k != "prediction"} for item in SAMPLE_DELIVERIES]
-    batch_predictions = ENGINE.apply_capacity_constrained_policy(raw_records)
-    for idx, item in enumerate(SAMPLE_DELIVERIES):
-        item["prediction"] = batch_predictions[idx]
-    SAMPLE_DELIVERIES.sort(key=lambda x: x["prediction"]["failure_probability"], reverse=True)
+    # Re-evaluate active deliveries with newly active model under fleet capacity policy
+    MANIFEST_STATE.rescore_with_model(ENGINE)
+    global SAMPLE_DELIVERIES
+    SAMPLE_DELIVERIES = MANIFEST_STATE.get_active_shipments()
     
     return {
         "message": f"Active model changed to {req.model_name}",
@@ -158,9 +199,10 @@ def switch_model(req: SwitchModelRequest):
 
 @app.get("/api/shipments/sample")
 def get_sample_shipments():
+    active_shipments = MANIFEST_STATE.get_active_shipments()
     return {
-        "count": len(SAMPLE_DELIVERIES),
-        "shipments": SAMPLE_DELIVERIES
+        "count": len(active_shipments),
+        "shipments": active_shipments
     }
 
 @app.post("/api/predict")
@@ -221,7 +263,7 @@ def apply_intervention(req: ApplyInterventionRequest):
     if req.shipment:
         target_rec = req.shipment.copy()
     else:
-        for item in SAMPLE_DELIVERIES:
+        for item in MANIFEST_STATE.get_active_shipments():
             if item.get("package_id") == req.package_id:
                 target_rec = item.copy()
                 break
@@ -250,14 +292,15 @@ def apply_intervention(req: ApplyInterventionRequest):
     db.save_shipment(updated_rec)
     db.record_intervention(req.package_id, chosen_opt)
 
-    # Sync in cached list
-    for item in SAMPLE_DELIVERIES:
-        if item.get("package_id") == req.package_id:
-            item["applied_intervention"] = chosen_opt
-            item["final_failure_probability"] = chosen_opt["new_prob"]
-            item["final_risk_tier"] = chosen_opt["new_risk_tier"]
-            item["status"] = "Intervention Confirmed — Plan Optimized"
-            break
+    # Sync in state manager
+    MANIFEST_STATE.update_shipment(req.package_id, {
+        "applied_intervention": chosen_opt,
+        "final_failure_probability": chosen_opt["new_prob"],
+        "final_risk_tier": chosen_opt["new_risk_tier"],
+        "status": "Intervention Confirmed — Plan Optimized"
+    })
+    global SAMPLE_DELIVERIES
+    SAMPLE_DELIVERIES = MANIFEST_STATE.get_active_shipments()
 
     return {
         "status": "success",
@@ -282,15 +325,16 @@ def complete_delivery(req: CompleteDeliveryRequest):
     )
     
     # Update in-memory state
-    for item in SAMPLE_DELIVERIES:
-        if item.get("package_id") == req.package_id:
-            item["status"] = f"COMPLETED: {req.outcome}"
-            if "updated_customer_history" in result:
-                hist = result["updated_customer_history"]
-                item["customer_previous_delivery_attempts"] = hist["previous_attempts"]
-                item["customer_previous_failed_attempts"] = hist["previous_fails"]
-                item["customer_previous_success_rate"] = hist["new_success_rate"]
-            break
+    updates = {"status": f"COMPLETED: {req.outcome}"}
+    if "updated_customer_history" in result:
+        hist = result["updated_customer_history"]
+        updates["customer_previous_delivery_attempts"] = hist["previous_attempts"]
+        updates["customer_previous_failed_attempts"] = hist["previous_fails"]
+        updates["customer_previous_success_rate"] = hist["new_success_rate"]
+
+    MANIFEST_STATE.update_shipment(req.package_id, updates)
+    global SAMPLE_DELIVERIES
+    SAMPLE_DELIVERIES = MANIFEST_STATE.get_active_shipments()
 
     return result
 
@@ -301,6 +345,7 @@ def optimize_route(req: RouteOptimizeRequest):
     with Haversine distance, calibrated urban circuity modeling, and smart intervention consolidation.
     """
     try:
+        active_shipments = MANIFEST_STATE.get_active_shipments()
         target_shipments = []
         if req.shipments is not None and len(req.shipments) > 0:
             target_shipments = req.shipments
@@ -309,11 +354,11 @@ def optimize_route(req: RouteOptimizeRequest):
             result["route_id"] = req.route_id or "CUSTOM_STOPS"
             return result
         elif req.route_id:
-            target_shipments = [p for p in SAMPLE_DELIVERIES if p.get("route_id") == req.route_id]
+            target_shipments = [p for p in active_shipments if p.get("route_id") == req.route_id]
             if not target_shipments:
-                target_shipments = SAMPLE_DELIVERIES
+                target_shipments = active_shipments
         else:
-            target_shipments = SAMPLE_DELIVERIES
+            target_shipments = active_shipments
 
         result = ROUTE_OPTIMIZER.optimize_route_from_shipments(
             target_shipments,
@@ -346,13 +391,14 @@ def preview_messaging(req: MessagePreviewRequest):
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats():
-    total_packages = len(SAMPLE_DELIVERIES)
-    high_risk_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"]["risk_tier"] == "HIGH")
-    med_risk_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"]["risk_tier"] == "MEDIUM")
-    low_risk_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"]["risk_tier"] == "LOW")
+    active_shipments = MANIFEST_STATE.get_active_shipments()
+    total_packages = len(active_shipments)
+    high_risk_count = sum(1 for p in active_shipments if p["prediction"]["risk_tier"] == "HIGH")
+    med_risk_count = sum(1 for p in active_shipments if p["prediction"]["risk_tier"] == "MEDIUM")
+    low_risk_count = sum(1 for p in active_shipments if p["prediction"]["risk_tier"] == "LOW")
 
-    capacity_approved_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"].get("capacity_approved") is True)
-    capacity_deferred_count = sum(1 for p in SAMPLE_DELIVERIES if p["prediction"].get("capacity_status") == "DEFERRED_DUE_TO_FLEET_CAPACITY")
+    capacity_approved_count = sum(1 for p in active_shipments if p["prediction"].get("capacity_approved") is True)
+    capacity_deferred_count = sum(1 for p in active_shipments if p["prediction"].get("capacity_status") == "DEFERRED_DUE_TO_FLEET_CAPACITY")
 
     baseline_success_rate = 82.4
     projected_post_intervention_success = 94.6
@@ -386,6 +432,154 @@ def get_dashboard_stats():
         },
         "database_status": db.get_status()
     }
+
+
+# =========================================================================
+# Phase 8: SaaS B2B Dynamic Manifest Engine Endpoints
+# =========================================================================
+
+@app.post("/api/manifest/upload")
+async def upload_manifest(
+    request: Request,
+    dry_run: bool = Query(False),
+    _auth: bool = Depends(verify_api_key)
+):
+    """
+    Ingests multipart CSV/JSON, raw text/csv, or JSON payload.
+    Supports ?dry_run=true for pre-flight validation without state mutation.
+    Returns schema quality summary, quarantined leakage details, and scored shipments.
+    """
+    content_type = request.headers.get("content-type", "").lower()
+    raw_content = None
+    filename = "manifest_upload.csv"
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        form_file = form.get("file")
+        if form_file and hasattr(form_file, "read"):
+            filename = getattr(form_file, "filename", "manifest_upload.csv")
+            raw_content = await form_file.read()
+        else:
+            raise HTTPException(status_code=400, detail="No file found in multipart upload. Ensure 'file' field is provided.")
+    elif "application/json" in content_type:
+        try:
+            raw_content = await request.json()
+            filename = "manifest_payload.json"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {str(e)}")
+    else:
+        # Fallback: attempt form parsing, then raw body
+        try:
+            form = await request.form()
+            form_file = form.get("file")
+            if form_file and hasattr(form_file, "read"):
+                filename = getattr(form_file, "filename", "manifest_upload.csv")
+                raw_content = await form_file.read()
+        except Exception:
+            pass
+        if raw_content is None:
+            raw_content = await request.body()
+
+    if raw_content is None or (isinstance(raw_content, (bytes, str)) and len(raw_content) == 0):
+        raise HTTPException(status_code=400, detail="Manifest payload is empty.")
+
+    # 1. Parse and validate pre-flight schema, leakage quarantine, CRM imputation
+    records, quality_summary = ManifestParser.parse_content(raw_content, filename=filename)
+
+    # 2. Score batch with multi-route capacity partitioning
+    predictions = score_manifest_records(ENGINE, records)
+    scored_shipments = []
+    for idx, rec in enumerate(records):
+        rec_copy = dict(rec)
+        rec_copy["prediction"] = predictions[idx]
+        scored_shipments.append(rec_copy)
+
+    # Attach capacity summary to quality summary
+    approved_count = sum(1 for s in scored_shipments if s["prediction"].get("capacity_approved") is True)
+    deferred_count = sum(1 for s in scored_shipments if s["prediction"].get("capacity_status") == "DEFERRED_DUE_TO_FLEET_CAPACITY")
+    quality_summary["fleet_capacity_approved_count"] = approved_count
+    quality_summary["fleet_capacity_deferred_count"] = deferred_count
+
+    manifest_id = f"manifest_{uuid.uuid4().hex[:12]}"
+    metadata = {
+        "manifest_id": manifest_id,
+        "filename": filename,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "total_packages": len(scored_shipments),
+        "routes_detected": quality_summary["routes_detected"],
+        "is_benchmark": False,
+        "dry_run": dry_run
+    }
+
+    # 3. If not dry_run, mutate active state and persist to database
+    if not dry_run:
+        # Sort active shipments by failure probability descending
+        scored_shipments.sort(
+            key=lambda x: x["prediction"]["failure_probability"],
+            reverse=True
+        )
+        MANIFEST_STATE.set_active_manifest(scored_shipments, metadata)
+        global SAMPLE_DELIVERIES
+        SAMPLE_DELIVERIES = MANIFEST_STATE.get_active_shipments()
+
+        for item in scored_shipments:
+            db.save_shipment(item)
+
+    return {
+        "status": "success",
+        "manifest_id": manifest_id,
+        "filename": filename,
+        "uploaded_at": metadata["uploaded_at"],
+        "dry_run": dry_run,
+        "total_packages": len(scored_shipments),
+        "routes_detected": quality_summary["routes_detected"],
+        "data_quality_summary": quality_summary,
+        "shipments": scored_shipments
+    }
+
+@app.post("/api/manifest/clear")
+@app.post("/api/manifest/reset")
+def reset_manifest(_auth: bool = Depends(verify_api_key)):
+    """Resets active manifest state back to canonical 30-stop benchmark."""
+    MANIFEST_STATE.reset_to_benchmark()
+    global SAMPLE_DELIVERIES
+    SAMPLE_DELIVERIES = MANIFEST_STATE.get_active_shipments()
+    meta = MANIFEST_STATE.get_metadata()
+    return {
+        "status": "success",
+        "message": "Manifest successfully reset to canonical 30-stop benchmark.",
+        "manifest_id": meta["manifest_id"],
+        "total_packages": len(SAMPLE_DELIVERIES),
+        "routes_detected": meta["routes_detected"]
+    }
+
+@app.get("/api/manifest/template")
+def get_manifest_template(_auth: bool = Depends(verify_api_key)):
+    """Returns downloadable CSV template with clean pre-dispatch headers and sample rows."""
+    template_csv = ManifestParser.generate_template_csv()
+    return Response(
+        content=template_csv,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="bridge_manifest_template.csv"'
+        }
+    )
+
+@app.get("/api/manifest/export")
+def export_manifest(_auth: bool = Depends(verify_api_key)):
+    """Streams active manifest as an enriched CSV (probabilities, risk tiers, capacity status, Top-3 SHAP drivers)."""
+    meta = MANIFEST_STATE.get_metadata()
+    shipments = MANIFEST_STATE.get_active_shipments()
+    csv_content = ManifestParser.export_shipments_to_csv(shipments)
+    filename = f"bridge_manifest_export_{meta.get('manifest_id', 'active')}.csv"
+    return StreamingResponse(
+        io.StringIO(csv_content),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
 
 # Mount static folder
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
