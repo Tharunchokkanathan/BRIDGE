@@ -1,15 +1,18 @@
 import React from 'react';
+import { IconLoader2 } from '@tabler/icons-react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'compact' | 'default' | 'touch';
   icon?: React.ReactNode;
+  loading?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
   variant = 'secondary',
   size = 'default',
   icon,
+  loading = false,
   children,
   className = '',
   disabled,
@@ -40,11 +43,17 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       className={`${baseClasses} ${sizeClasses} ${variantClasses} ${className}`}
-      disabled={disabled}
+      disabled={disabled || loading}
       {...props}
     >
-      {icon && <span className="inline-flex shrink-0">{icon}</span>}
+      {loading ? (
+        <IconLoader2 size={size === 'compact' ? 13 : 15} className="animate-spin shrink-0" />
+      ) : icon ? (
+        <span className="inline-flex shrink-0">{icon}</span>
+      ) : null}
       {children}
     </button>
   );
 };
+
+export default Button;

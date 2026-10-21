@@ -62,10 +62,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           </span>
         </div>
 
-        <div className="hidden lg:flex items-center gap-1 text-[11px] text-[var(--ink-faint)] font-mono truncate">
+        <div className="hidden lg:flex items-center gap-1 text-[11px] text-[var(--ink-muted)] font-mono truncate">
           <span>·</span>
           <span>Manifest:</span>
-          <span className="text-[var(--ink-muted)] truncate">{manifestId}</span>
+          <span className="truncate">{manifestId}</span>
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             {isApiHealthy ? 'API: ONLINE' : 'API: DOWN'}
           </span>
           {latencyMs !== undefined && isApiHealthy && (
-            <span className="text-[10px] text-[var(--ink-faint)] hidden lg:inline">
+            <span className="text-[10px] text-[var(--ink-muted)] hidden lg:inline">
               {latencyMs}ms
             </span>
           )}
@@ -156,7 +156,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
 
         {/* Release Version Chip */}
-        <span className="hidden xl:inline-block font-mono text-[10px] text-[var(--ink-faint)] bg-[var(--surface-sunken)] px-1.5 py-0.5 rounded-[2px] border border-[var(--border)]">
+        <span className="hidden xl:inline-block font-mono text-[10px] text-[var(--ink-muted)] bg-[var(--surface-sunken)] px-1.5 py-0.5 rounded-[2px] border border-[var(--border)]">
           v1.6.0
         </span>
       </div>
