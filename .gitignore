@@ -77,3 +77,9 @@ models/*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
