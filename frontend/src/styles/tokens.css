@@ -1,0 +1,143 @@
+/* ==========================================================================
+   BRIDGE Design System Tokens ("Dispatch Desk")
+   WCAG AA Compliant | Neutral Instrument Panel Palette
+   ========================================================================== */
+
+:root {
+  /* Surface & Canvas (Light) */
+  --canvas: #F3F5F7;
+  --surface: #FFFFFF;
+  --surface-muted: #F8F9FA;
+  --surface-sunken: #EDF0F3;
+
+  /* Structural Hairline Borders */
+  --border: #D9DEE3;
+  --border-strong: #C3CAD1;
+
+  /* Typography & Ink */
+  --ink: #14181C;
+  --ink-muted: #5B6670;
+  --ink-faint: #8A949E;
+
+  /* Accent (Slate Cyan - interactive & focus only) */
+  --accent: #0B5E73;
+  --accent-hover: #084A5B;
+  --accent-subtle: #E3F0F3;
+  --focus-ring: #0B5E73;
+
+  /* Semantic Risk Colors */
+  --risk-low: #2F7D57;
+  --risk-low-bg: #E6F2EB;
+  --risk-med: #9A6700;
+  --risk-med-bg: #FBF1D9;
+  --risk-high: #B42318;
+  --risk-high-bg: #FBE9E7;
+
+  /* Operational & Info */
+  --info: #1F5FA8;
+  --info-bg: #E6EFF9;
+
+  /* Elevation Shadows (Restricted strictly to floating layers) */
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.16);
+
+  /* Radius Tokens */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Motion Tokens */
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 150ms;
+  --motion-duration-slow: 180ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-flash-highlight: 400ms ease-out;
+
+  /* Colorblind-Safe Categorical Series */
+  --chart-series-1: #2B6CB0;
+  --chart-series-2: #319795;
+  --chart-series-3: #D69E2E;
+  --chart-series-4: #553C9A;
+  --chart-series-5: #4A5568;
+}
+
+.dark {
+  /* Surface & Canvas (Dark) */
+  --canvas: #0E1215;
+  --surface: #151A1F;
+  --surface-muted: #1A2026;
+  --surface-sunken: #0A0D10;
+
+  /* Structural Hairline Borders */
+  --border: #2A323A;
+  --border-strong: #3A444E;
+
+  /* Typography & Ink */
+  --ink: #E6EAED;
+  --ink-muted: #9AA5AF;
+  --ink-faint: #6E7A85;
+
+  /* Accent (Electric Cyan - interactive & focus only) */
+  --accent: #4FB3C8;
+  --accent-hover: #7CC8D8;
+  --accent-subtle: #12303A;
+  --focus-ring: #7CC8D8;
+
+  /* Semantic Risk Colors */
+  --risk-low: #5BBF8A;
+  --risk-low-bg: rgba(91, 191, 138, 0.14);
+  --risk-med: #E0A33A;
+  --risk-med-bg: rgba(224, 163, 58, 0.14);
+  --risk-high: #F07167;
+  --risk-high-bg: rgba(240, 113, 103, 0.14);
+
+  /* Operational & Info */
+  --info: #589BD6;
+  --info-bg: rgba(88, 155, 214, 0.14);
+
+  /* Elevation Shadows (Restricted strictly to floating layers) */
+  --shadow-menu: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.6);
+
+  /* Colorblind-Safe Categorical Series (Dark Adapted) */
+  --chart-series-1: #4299E1;
+  --chart-series-2: #38B2AC;
+  --chart-series-3: #ECC94B;
+  --chart-series-4: #9F7AEA;
+  --chart-series-5: #A0AEC0;
+}
+
+/* Global Reset & Base Typography Settings */
+body {
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular Numerals and Monospace Class */
+.font-mono,
+.tabular-nums,
+code,
+pre,
+kbd,
+samp {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Respect Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
