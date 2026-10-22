@@ -136,7 +136,7 @@ export const ShipmentRecordSchema = z.object({
   signature_required: z.number().optional(),
   delivery_window_start: z.string().optional(),
   delivery_window_end: z.string().optional(),
-  applied_intervention: z.string().optional(),
+  applied_intervention: z.union([z.string(), z.record(z.any()), z.null()]).optional(),
   prediction: PredictionSchema.optional(),
 }).passthrough();
 
