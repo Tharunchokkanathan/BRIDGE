@@ -21,6 +21,7 @@
 
   /* Accent (Slate Cyan - interactive & focus only) */
   --accent: #0B5E73;
+  --accent-fg: #FFFFFF;
   --accent-hover: #084A5B;
   --accent-subtle: #E3F0F3;
   --focus-ring: #0B5E73;
@@ -80,6 +81,7 @@
 
   /* Accent (Electric Cyan - interactive & focus only) */
   --accent: #4FB3C8;
+  --accent-fg: #0A1E24;
   --accent-hover: #7CC8D8;
   --accent-subtle: #12303A;
   --focus-ring: #7CC8D8;

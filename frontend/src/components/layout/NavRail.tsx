@@ -58,7 +58,11 @@ export const NavRail: React.FC<NavRailProps> = ({
     >
       {/* Brand Header */}
       <div className="h-12 border-b border-[var(--border)] flex items-center px-3.5 gap-2.5 overflow-hidden">
-        <div className="w-7 h-7 rounded-[3px] bg-[var(--accent)] text-white flex items-center justify-center font-mono text-[13px] font-bold shrink-0 tracking-wider">
+        <div
+          role="img"
+          aria-label="BRIDGE system mark"
+          className="w-7 h-7 rounded-[3px] bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center font-mono text-[13px] font-bold shrink-0 tracking-wider"
+        >
           BR
         </div>
         {!collapsed && (

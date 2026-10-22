@@ -39,7 +39,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         <div
           className={`w-4 h-4 rounded-[2px] border transition-colors flex items-center justify-center ${
             checked
-              ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+              ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-fg)]'
               : 'bg-[var(--surface)] border-[var(--border-strong)] hover:border-[var(--accent)]'
           } peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--focus-ring)] peer-focus-visible:ring-offset-1`}
         >

@@ -745,6 +745,7 @@ export const RouteOptimizer: React.FC = () => {
             className="flex-1 flex flex-col justify-between"
           >
             <div
+              role="region"
               tabIndex={0}
               aria-label="Ordered Stop List"
               className="max-h-[280px] overflow-y-auto divide-y divide-[var(--border)] text-[12px] focus:outline-hidden"

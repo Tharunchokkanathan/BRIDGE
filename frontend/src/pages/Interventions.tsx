@@ -725,7 +725,7 @@ export const Interventions: React.FC = () => {
                 </div>
                 {messagePreview.cta_text && (
                   <div className="pt-2">
-                    <span className="inline-block px-3 py-1 rounded-[3px] bg-[var(--accent)] text-white text-[11px] font-medium font-sans">
+                    <span className="inline-block px-3 py-1 rounded-[3px] bg-[var(--accent)] text-[var(--accent-fg)] text-[11px] font-medium font-sans">
                       {messagePreview.cta_text}
                     </span>
                   </div>
