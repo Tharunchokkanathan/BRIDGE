@@ -88,7 +88,7 @@ export const api = {
    */
   async getShipments(limit?: number): Promise<ShipmentListResponse> {
     const query = limit ? `?limit=${limit}` : '';
-    const data = await fetchJson<unknown>(`/shipments${query}`);
+    const data = await fetchJson<unknown>(`/shipments/sample${query}`);
     return ShipmentListResponseSchema.parse(data);
   },
 

@@ -50,6 +50,7 @@ export const DashboardStatsSchema = z.object({
   low_risk_count: z.number().optional(),
   fleet_capacity_limit: z.number().optional(),
   capacity_approved_count: z.number().optional(),
+  capacity_deferred_count: z.number().optional(),
   capacity_exhausted: z.boolean().optional(),
   capacity_utilization_rate: z.number().optional(),
   expected_first_attempt_failures: z.number().optional(),
@@ -62,6 +63,8 @@ export const DashboardStatsSchema = z.object({
   active_model: z.string().optional(),
   champion_model: z.string().optional(),
   is_champion_active: z.boolean().optional(),
+  operational_thresholds: OperationalThresholdsSchema.optional(),
+  database_status: DatabaseStatusSchema.optional(),
 }).passthrough();
 
 export type DashboardStats = z.infer<typeof DashboardStatsSchema>;
@@ -113,7 +116,7 @@ export const PredictionSchema = z.object({
   capacity_status: z.string().optional(),
   fleet_allocation_rate: z.number().optional(),
   risk_factors: z.array(RiskFactorSchema).optional(),
-});
+}).passthrough();
 
 export const ShipmentRecordSchema = z.object({
   package_id: z.string(),
@@ -128,12 +131,14 @@ export const ShipmentRecordSchema = z.object({
   departure_hour: z.number().optional(),
   customer_availability_rate: z.number().optional(),
   address_access_difficulty: z.number().optional(),
+  zone_id: z.string().optional(),
+  location_type: z.string().optional(),
   signature_required: z.number().optional(),
   delivery_window_start: z.string().optional(),
   delivery_window_end: z.string().optional(),
   applied_intervention: z.string().optional(),
   prediction: PredictionSchema.optional(),
-});
+}).passthrough();
 
 export const ShipmentListResponseSchema = z.object({
   count: z.number(),
@@ -156,28 +161,37 @@ export const RouteOptimizeRequestSchema = z.object({
 });
 
 export const RouteStopSchema = z.object({
-  sequence: z.number(),
-  package_id: z.string(),
+  sequence_order: z.number().optional(),
+  sequence: z.number().optional(),
+  package_id: z.string().optional(),
+  package_ids: z.array(z.string()).optional(),
+  package_count: z.number().optional(),
   stop_id: z.string().optional(),
   latitude: z.number(),
   longitude: z.number(),
   is_locker_stop: z.boolean().optional(),
   failure_probability: z.number().optional(),
   risk_tier: z.string().optional(),
-});
+}).passthrough();
 
 export const RouteOptimizeResponseSchema = z.object({
-  route_id: z.string(),
+  route_id: z.string().optional(),
   original_distance_km: z.number(),
   optimized_distance_km: z.number(),
-  distance_saved_km: z.number(),
-  reduction_pct: z.number(),
-  original_stops_count: z.number(),
-  optimized_stops_count: z.number(),
-  stops_consolidated: z.number(),
+  distance_savings_km: z.number().optional(),
+  distance_saved_km: z.number().optional(),
+  distance_savings_pct: z.number().optional(),
+  reduction_pct: z.number().optional(),
+  original_stops_count: z.number().optional(),
+  optimized_stops_count: z.number().optional(),
+  stops_count: z.number().optional(),
+  stops_consolidated: z.number().optional(),
+  estimated_duration_minutes: z.number().optional(),
+  savings_target_met: z.boolean().optional(),
   circuity_factor: z.number().optional(),
   optimization_latency_ms: z.number().optional(),
+  stops: z.array(RouteStopSchema).optional(),
   stops_sequence: z.array(RouteStopSchema).optional(),
-});
+}).passthrough();
 
 export type RouteOptimizeResponse = z.infer<typeof RouteOptimizeResponseSchema>;
