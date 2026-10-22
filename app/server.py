@@ -581,10 +581,27 @@ def export_manifest(_auth: bool = Depends(verify_api_key)):
     )
 
 
-# Mount static folder
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
-os.makedirs(STATIC_DIR, exist_ok=True)
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+# Mount frontend / static folder with clean SPA client routing
+FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+SERVE_DIR = FRONTEND_DIST if os.path.exists(os.path.join(FRONTEND_DIST, "index.html")) else STATIC_DIR
+
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+class SPAStaticFiles(StaticFiles):
+    """StaticFiles subclass that falls back to index.html for client-side SPA routing."""
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except (StarletteHTTPException, HTTPException) as exc:
+            if exc.status_code == 404 and self.html:
+                return await super().get_response("index.html", scope)
+            raise exc
+
+
+os.makedirs(SERVE_DIR, exist_ok=True)
+app.mount("/", SPAStaticFiles(directory=SERVE_DIR, html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
