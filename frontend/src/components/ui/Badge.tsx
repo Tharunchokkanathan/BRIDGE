@@ -97,7 +97,7 @@ export const Badge: React.FC<BadgeProps> = ({
         </span>
         <span className="uppercase tracking-wider">{displayLabel}</span>
         {score !== undefined && (
-          <span className="tabular-nums font-mono opacity-90 pl-0.5 border-l border-current/30">
+          <span className="tabular-nums font-mono pl-0.5 border-l border-current/30">
             {score.toFixed(3)}
           </span>
         )}

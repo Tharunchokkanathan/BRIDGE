@@ -195,3 +195,4 @@ export const RouteOptimizeResponseSchema = z.object({
 }).passthrough();
 
 export type RouteOptimizeResponse = z.infer<typeof RouteOptimizeResponseSchema>;
+export type RouteStop = z.infer<typeof RouteStopSchema>;
