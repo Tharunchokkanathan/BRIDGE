@@ -22,7 +22,7 @@ export const Badge: React.FC<BadgeProps> = ({
   if (type === 'heuristic') {
     return (
       <span
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[11px] font-mono leading-none border border-[#9A6700]/30 bg-[var(--risk-med-bg)] text-[var(--risk-med)] uppercase tracking-wider font-medium ${className}`}
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[11px] font-mono leading-none border border-[var(--risk-med)]/30 bg-[var(--risk-med-bg)] text-[var(--risk-med)] uppercase tracking-wider font-semibold ${className}`}
         title="Rule-based heuristic fallback (Phase 5.1 guardrail)"
       >
         <span>Rule-based heuristic</span>

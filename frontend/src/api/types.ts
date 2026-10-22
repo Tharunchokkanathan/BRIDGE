@@ -196,3 +196,105 @@ export const RouteOptimizeResponseSchema = z.object({
 
 export type RouteOptimizeResponse = z.infer<typeof RouteOptimizeResponseSchema>;
 export type RouteStop = z.infer<typeof RouteStopSchema>;
+
+// ============================================================================
+// 6. Interventions & Messaging
+// ============================================================================
+
+export const InterventionOptionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  cost_tier: z.string().optional(),
+  effort_level: z.string().optional(),
+  new_prob: z.number().optional(),
+  new_risk_tier: z.string().optional(),
+  risk_reduction_points: z.number().optional(),
+  utility_score: z.number().optional(),
+  is_rule_based_heuristic: z.boolean().optional(),
+  recommended: z.boolean().optional(),
+  simulation_disclaimer: z.string().optional(),
+}).passthrough();
+
+export const InterventionSimulateResponseSchema = z.object({
+  original_failure_prob: z.number(),
+  original_risk_tier: z.string(),
+  intervention_options: z.array(InterventionOptionSchema),
+}).passthrough();
+
+export const MessagePreviewResponseSchema = z.object({
+  package_id: z.string(),
+  channel: z.string(),
+  recipient_name: z.string().optional(),
+  headline: z.string().optional(),
+  subject: z.string().optional(),
+  body: z.string(),
+  cta_text: z.string().optional(),
+  cta_url: z.string().optional(),
+  preview_disclaimer: z.string().optional(),
+}).passthrough();
+
+export type InterventionOption = z.infer<typeof InterventionOptionSchema>;
+export type InterventionSimulateResponse = z.infer<typeof InterventionSimulateResponseSchema>;
+export type MessagePreviewResponse = z.infer<typeof MessagePreviewResponseSchema>;
+
+// ============================================================================
+// 7. Zone Priors & Delivery Outcomes
+// ============================================================================
+
+export const ZonePriorRecordSchema = z.object({
+  zone_id: z.string(),
+  description: z.string().optional(),
+  alpha: z.number(),
+  beta: z.number(),
+  sample_count: z.number().optional(),
+  mean_failure_rate: z.number().optional(),
+  variance: z.number().optional(),
+  trend: z.string().optional(),
+});
+
+export const DeliveryCompleteResponseSchema = z.object({
+  status: z.string(),
+  outcome_recorded: z.string().optional(),
+  updated_customer_history: z.object({
+    previous_attempts: z.number(),
+    previous_fails: z.number(),
+    new_success_rate: z.number(),
+  }).optional(),
+  zone_prior_update: z.object({
+    zone_id: z.string().optional(),
+    alpha: z.number().optional(),
+    beta: z.number().optional(),
+    updated_prior_rate: z.number().optional(),
+  }).optional(),
+}).passthrough();
+
+export type ZonePriorRecord = z.infer<typeof ZonePriorRecordSchema>;
+export type DeliveryCompleteResponse = z.infer<typeof DeliveryCompleteResponseSchema>;
+
+// ============================================================================
+// 8. Dynamic Manifest & Data Quality
+// ============================================================================
+
+export const DataQualitySummarySchema = z.object({
+  total_rows_received: z.number(),
+  valid_rows: z.number(),
+  quarantined_leakage_columns: z.array(z.string()).optional(),
+  missing_crm_columns_imputed: z.array(z.string()).optional(),
+  fleet_capacity_approved_count: z.number().optional(),
+  routes_detected: z.array(z.string()).optional(),
+}).passthrough();
+
+export const ManifestUploadResponseSchema = z.object({
+  status: z.string(),
+  manifest_id: z.string().optional(),
+  filename: z.string().optional(),
+  total_packages: z.number().optional(),
+  routes_detected: z.array(z.string()).optional(),
+  data_quality_summary: DataQualitySummarySchema.optional(),
+  shipments: z.array(ShipmentRecordSchema).optional(),
+  dry_run: z.boolean().optional(),
+}).passthrough();
+
+export type DataQualitySummary = z.infer<typeof DataQualitySummarySchema>;
+export type ManifestUploadResponse = z.infer<typeof ManifestUploadResponseSchema>;
