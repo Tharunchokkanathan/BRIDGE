@@ -248,7 +248,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         )}
 
         {/* Primary Screen Viewport */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 min-w-0">
+        <main
+          id="main-content"
+          tabIndex={0}
+          aria-label="Main content"
+          className="flex-1 overflow-y-auto p-4 lg:p-6 min-w-0 focus:outline-none"
+        >
           <div className="max-w-[1600px] mx-auto w-full">
             <ErrorBoundary>{children}</ErrorBoundary>
           </div>

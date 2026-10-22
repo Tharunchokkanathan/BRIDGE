@@ -48,6 +48,7 @@ export const App: React.FC = () => {
       case '/model-governance':
         return <ModelGovernance />;
       case '/audit':
+      case '/audit-disclosures':
         return <AuditDisclosures />;
       case '/settings':
         return <Settings />;
