@@ -27,7 +27,19 @@ class DatabaseManager:
       and recalculates dynamic Bayesian zone failure priors.
     """
     def __init__(self, db_path=None):
-        self.db_path = db_path or os.getenv("BRIDGE_DB_PATH", "data/bridge_local.db")
+        default_db = "data/bridge_local.db"
+        # In read-only serverless environments (e.g. AWS Lambda / Vercel), copy sqlite db to /tmp if writable
+        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            tmp_db = "/tmp/bridge_local.db"
+            if not os.path.exists(tmp_db) and os.path.exists(default_db):
+                try:
+                    import shutil
+                    shutil.copyfile(default_db, tmp_db)
+                except Exception:
+                    pass
+            default_db = tmp_db
+
+        self.db_path = db_path or os.getenv("BRIDGE_DB_PATH", default_db)
         self.supabase_client = None
         self.is_supabase = bool(SUPABASE_URL and SUPABASE_KEY)
         
