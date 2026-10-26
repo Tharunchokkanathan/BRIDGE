@@ -37,10 +37,15 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Load Benchmark Data & Model Metadata
+# Load Benchmark Data & Model Metadata (Self-contained for any root)
 # ---------------------------------------------------------------------------
-BENCHMARK_FILE = os.path.join(DATA_DIR, "benchmark_shipments.json")
-METADATA_FILE = os.path.join(MODELS_DIR, "model_metadata.json")
+BENCHMARK_FILE = os.path.join(os.path.dirname(__file__), "benchmark_shipments.json")
+if not os.path.exists(BENCHMARK_FILE):
+    BENCHMARK_FILE = os.path.join(DATA_DIR, "benchmark_shipments.json")
+
+METADATA_FILE = os.path.join(os.path.dirname(__file__), "model_metadata.json")
+if not os.path.exists(METADATA_FILE):
+    METADATA_FILE = os.path.join(MODELS_DIR, "model_metadata.json")
 
 def load_initial_benchmark() -> List[Dict[str, Any]]:
     if os.path.exists(BENCHMARK_FILE):
@@ -600,3 +605,13 @@ def manifest_export():
         out.write(f"{s.get('package_id')},{s.get('route_id')},{pred.get('failure_probability')},{pred.get('risk_tier')},{pred.get('capacity_status')}\n")
     out.seek(0)
     return StreamingResponse(out, media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="bridge_manifest_export.csv"'})
+
+# Mount static UI at root so index.html, css, js work if Root Directory is api
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if not os.path.exists(STATIC_DIR):
+    STATIC_DIR = os.path.join(PROJECT_ROOT, "public")
+
+if os.path.exists(STATIC_DIR):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
