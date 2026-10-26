@@ -1,483 +1,409 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRIDGE — AI-Powered First Attempt Delivery Success Engine</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BRIDGE | Enterprise First-Attempt Delivery Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <div class="bg-glow-1"></div>
-    <div class="bg-glow-2"></div>
-
-    <div class="app-container">
-        <!-- Header -->
-        <header class="top-nav">
-            <div class="brand-wrapper">
-                <div class="brand-logo">⚡</div>
-                <div>
-                    <div class="brand-title">BRIDGE AI</div>
-                    <div class="brand-subtitle">First Attempt Delivery Success Engine • Pre-Dispatch Risk Intelligence</div>
-                </div>
-            </div>
-
-            <div class="nav-actions">
-                <div class="model-badge">
-                    <span style="color: var(--text-muted); font-size: 11px;">ACTIVE MODEL:</span>
-                    <select id="model-select" class="model-select" aria-label="Select Active Model">
-                        <option value="Logistic Regression">Logistic Regression (Champion)</option>
-                        <option value="LightGBM Candidate">LightGBM Candidate (TreeSHAP)</option>
-                        <option value="Random Forest">Random Forest Classifier</option>
-                    </select>
-                </div>
-                <div class="status-indicator">
-                    <div class="pulse-dot"></div>
-                    <span id="ai-engine-status">AI Engine Live</span>
-                </div>
-                <div class="status-indicator" id="db-status-badge" style="color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); font-weight: 500;">
-                    <span>🗄️</span>
-                    <span id="db-backend-name">DB: Connected</span>
-                </div>
-            </div>
-        </header>
-
-        <!-- KPI Impact Cards -->
-        <section class="kpi-grid">
-            <div class="kpi-card">
-                <div>
-                    <div class="kpi-label">First-Attempt Success Rate</div>
-                    <div class="kpi-value text-positive" id="stat-success-rate">94.6%</div>
-                    <div class="kpi-subtext text-positive" id="stat-success-sub">+12.2% vs baseline (82.4%)</div>
-                </div>
-                <div class="kpi-icon">🎯</div>
-            </div>
-
-            <div class="kpi-card">
-                <div>
-                    <div class="kpi-label">Failed Deliveries Prevented</div>
-                    <div class="kpi-value text-positive" id="stat-failures-saved">-21.8%</div>
-                    <div class="kpi-subtext" style="color: var(--text-muted);">Pre-dispatch mitigation</div>
-                </div>
-                <div class="kpi-icon">🛡️</div>
-            </div>
-
-            <div class="kpi-card">
-                <div>
-                    <div class="kpi-label">High-Risk Flagged</div>
-                    <div class="kpi-value text-negative" id="stat-high-risk">--</div>
-                    <div class="kpi-subtext" style="color: var(--text-muted);">Proactive actions queued</div>
-                </div>
-                <div class="kpi-icon">⚠️</div>
-            </div>
-
-            <div class="kpi-card">
-                <div>
-                    <div class="kpi-label">Estimated Fuel & Mileage Saved</div>
-                    <div class="kpi-value text-cyan" id="stat-fuel-saved">~18.2%</div>
-                    <div class="kpi-subtext text-cyan">Avoided 2nd/3rd attempts</div>
-                </div>
-                <div class="kpi-icon">⛽</div>
-            </div>
-        </section>
-
-        <!-- Navigation Tabs -->
-        <div class="tabs-wrapper" role="tablist">
-            <button class="tab-btn active" data-target="dispatcher-view" role="tab" aria-selected="true">
-                <span>📋</span> Dispatcher Command Center
-            </button>
-            <button class="tab-btn" data-target="route-view" role="tab" aria-selected="false">
-                <span>🗺️</span> Route Optimization & Fleet Savings
-            </button>
-            <button class="tab-btn" data-target="customer-view" role="tab" aria-selected="false">
-                <span>📱</span> Customer Interventions & Messaging
-            </button>
-            <button class="tab-btn" data-target="audit-view" role="tab" aria-selected="false">
-                <span>🔬</span> Model Benchmark & Technical Audit
-            </button>
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand-container">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
         </div>
-
-        <!-- TAB 1: Dispatcher View -->
-        <div class="tab-panel active" id="dispatcher-view" role="tabpanel">
-            <div class="dispatcher-grid">
-                <!-- Left: Pre-Dispatch Shipment Table -->
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>📦</span> Pre-Dispatch Shipments Queue
-                        </div>
-                        <div class="panel-filters">
-                            <span class="filter-chip active" data-filter="ALL">All</span>
-                            <span class="filter-chip" data-filter="HIGH">High Risk</span>
-                            <span class="filter-chip" data-filter="MEDIUM">Medium</span>
-                            <span class="filter-chip" data-filter="LOW">Low Risk</span>
-                        </div>
-                    </div>
-
-                    <div style="margin-bottom: 12px;">
-                        <input type="text" id="shipment-search" placeholder="Search by Package ID, Station, or Route..." 
-                               style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: #fff; font-size: 13px; outline: none;">
-                    </div>
-
-                    <div class="table-container">
-                        <table class="shipment-table">
-                            <thead>
-                                <tr>
-                                    <th>Package ID</th>
-                                    <th>Station</th>
-                                    <th>Departure</th>
-                                    <th>Cust. Avail.</th>
-                                    <th>Capacity Status</th>
-                                    <th>Failure Risk</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="shipments-tbody">
-                                <!-- Populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Right: Package Risk Inspector -->
-                <div class="panel-card inspector-card">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>🔍</span> Pre-Dispatch Risk Inspector
-                        </div>
-                    </div>
-
-                    <div class="risk-gauge-container">
-                        <div class="gauge-circle gauge-high" id="inspector-gauge">
-                            --%
-                            <span class="gauge-label">RISK</span>
-                        </div>
-                        <div class="gauge-info">
-                            <h4 id="inspector-pkg-id">Select a Package</h4>
-                            <p id="inspector-status-desc">Click any shipment in the queue to inspect AI risk factors and trigger proactive customer intervention.</p>
-                        </div>
-                    </div>
-
-                    <!-- Explanatory Attributions -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <h4 style="font-size: 13px; font-weight: 600;">Key Driving Risk Factors:</h4>
-                        <span id="inspector-explainer-badge" style="font-size: 10px; color: var(--accent-cyan); font-family: monospace;">Linear SHAP (Calibrated Margin)</span>
-                    </div>
-                    <div class="factors-list" id="inspector-factors">
-                        <!-- Populated dynamically -->
-                    </div>
-
-                    <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Shipment & Context Attributes:</h4>
-                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-size: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
-                        <div><span style="color: var(--text-muted);">Customer Preference:</span> <strong id="spec-customer-pref">--</strong></div>
-                        <div><span style="color: var(--text-muted);">Signature:</span> <strong id="spec-signature">--</strong></div>
-                        <div><span style="color: var(--text-muted);">Access Difficulty:</span> <strong id="spec-access-diff">--</strong></div>
-                        <div><span style="color: var(--text-muted);">Past Failures:</span> <strong id="spec-prior-fails">--</strong></div>
-                        <div><span style="color: var(--text-muted);">Fleet Capacity Cap:</span> <strong id="spec-capacity-status">--</strong></div>
-                        <div><span style="color: var(--text-muted);">Priority Rank:</span> <strong id="spec-priority-rank">--</strong></div>
-                    </div>
-
-                    <button class="btn-primary" id="inspector-intervene-btn" style="width: 100%; justify-content: center;">
-                        <span>⚡</span> Trigger Proactive Customer Intervention Flow
-                    </button>
-                </div>
-            </div>
+        <div>
+          <div class="brand-title">BRIDGE <span>LOGISTICS</span></div>
+          <div class="brand-tagline">First-Attempt Delivery Risk Intelligence Engine</div>
         </div>
-
-        <!-- TAB 2: Route Optimization & Fleet Savings -->
-        <div class="tab-panel" id="route-view" role="tabpanel">
-            <!-- Spatial Model Mandatory Disclosure -->
-            <div class="disclosure-banner disclosure-warning">
-                <span style="font-size: 18px;">⚠️</span>
-                <div>
-                    <strong>Spatial Distance Model Disclosure:</strong>
-                    Route distances are calculated using vectorized Haversine geometry scaled by an empirical urban circuity factor (&kappa; = 1.35) calibrated for Los Angeles street-grid topology. They represent approximate road-network travel distances, not turn-by-turn road navigation or direct live vehicle telematics.
-                </div>
-            </div>
-
-            <!-- Route Controls Bar -->
-            <div class="route-controls-bar">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <label style="font-size: 12px; color: var(--text-muted); font-weight: 600;">ACTIVE ROUTE:</label>
-                    <select id="route-select" class="model-select" style="min-width: 260px;" aria-label="Select Route">
-                        <option value="RouteID_00143bdd-0a6b-49ec-bb35-36593d303e77">RouteID_00143bdd (30 Stops • Los Angeles DLA3)</option>
-                    </select>
-                </div>
-
-                <div class="route-toggles">
-                    <label class="toggle-label" title="Collapse locker packages into consolidated hub and defer station holds">
-                        <input type="checkbox" id="toggle-route-interventions" checked>
-                        <span>Apply Smart Interventions</span>
-                    </label>
-                    <label class="toggle-label" title="Calculate closed depot-to-depot tour">
-                        <input type="checkbox" id="toggle-route-circuit" checked>
-                        <span>Return to Depot (Closed Tour)</span>
-                    </label>
-                    <button class="btn-primary" id="btn-run-optimization" style="padding: 6px 14px;">
-                        <span>⚡</span> Run 2-Opt Optimizer
-                    </button>
-                </div>
-            </div>
-
-            <!-- Dual-Level Savings Cards -->
-            <div class="dual-savings-container">
-                <div class="savings-card macro">
-                    <div class="savings-label">Macro Sequence Optimization (2-Opt TSP)</div>
-                    <div class="savings-value text-cyan" id="route-macro-savings-pct">68.9%</div>
-                    <div class="savings-subtext">
-                        <strong>Baseline:</strong> Unsequenced Alphabetical Manifest (<span id="route-orig-km">27.55</span> km &rarr; <span id="route-opt-km">8.58</span> km).
-                        Untangles arbitrary stop ordering into a spatial nearest-neighbor tour.
-                    </div>
-                    <div style="margin-top: 8px;">
-                        <span class="disclosure-badge heuristic">Heuristic Sequence Optimization</span>
-                    </div>
-                </div>
-
-                <div class="savings-card micro">
-                    <div class="savings-label">Micro Prescriptive Intervention Savings</div>
-                    <div class="savings-value text-positive" id="route-micro-savings-pct">12.5%</div>
-                    <div class="savings-subtext">
-                        <strong>Active Tour Reduction:</strong> 30 stops &rarr; 25 stops when high-risk deliveries are deferred or consolidated to locker hubs (9.06 km &rarr; 7.92 km).
-                    </div>
-                    <div style="margin-top: 8px;">
-                        <span class="disclosure-badge simulation">Active Manifest Reduction (Day 1)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Route Output Grid -->
-            <div class="route-grid">
-                <!-- Left: Route Metric Breakdown -->
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>📊</span> Dispatch Tour Summary
-                        </div>
-                        <span id="route-status-pill" class="capacity-badge approved">OPTIMIZED</span>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 11px; color: var(--text-muted);">Total Tour Distance</div>
-                            <div style="font-size: 20px; font-weight: 700;" id="metric-tour-dist">8.58 km</div>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 11px; color: var(--text-muted);">Distance Saved</div>
-                            <div style="font-size: 20px; font-weight: 700; color: #34d399;" id="metric-dist-saved">18.97 km</div>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 11px; color: var(--text-muted);">Active Stops Visited</div>
-                            <div style="font-size: 20px; font-weight: 700;" id="metric-stops-count">29 Stops</div>
-                        </div>
-                        <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                            <div style="font-size: 11px; color: var(--text-muted);">Est. Drive & Service Duration</div>
-                            <div style="font-size: 20px; font-weight: 700;" id="metric-tour-duration">107.6 min</div>
-                        </div>
-                    </div>
-
-                    <div style="padding: 12px; background: rgba(99, 102, 241, 0.05); border-radius: var(--radius-sm); border: 1px solid rgba(99, 102, 241, 0.2); font-size: 12px;">
-                        <strong style="color: #a5b4fc;">Operations Benchmark Target:</strong>
-                        <div style="margin-top: 4px; color: var(--text-muted);">
-                            Target: &ge; 12.0% distance reduction. Current status: <strong style="color: #34d399;" id="metric-target-status">MET (&ge; 12.0%)</strong>.
-                        </div>
-                        <div style="margin-top: 6px; font-size: 11px; color: #94a3b8;">
-                            Note: Deferred deliveries eliminate failed delivery attempts today, but require delivery dispatch on subsequent scheduled dates.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right: Stop Sequence Progression -->
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>📍</span> 2-Opt Stop Sequence Progression
-                        </div>
-                        <span style="font-size: 11px; color: var(--text-muted);">Spatial Dispatch Sequence</span>
-                    </div>
-
-                    <div class="sequence-table-wrapper">
-                        <table class="sequence-table">
-                            <thead>
-                                <tr>
-                                    <th>Step</th>
-                                    <th>Stop ID</th>
-                                    <th>Coordinates</th>
-                                    <th>Parcels</th>
-                                    <th>Type</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sequence-tbody">
-                                <!-- Populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 3: Customer Mobile Intervention Portal & Multi-Channel Messaging -->
-        <div class="tab-panel" id="customer-view" role="tabpanel">
-            <!-- Simulation Disclosure Banner -->
-            <div class="disclosure-banner disclosure-info">
-                <span style="font-size: 18px;">ℹ️</span>
-                <div>
-                    <strong>Simulation & Prescriptive Guidance Disclosure:</strong>
-                    Projected failure probabilities reflect simulated customer presence assumptions (e.g. 96% availability upon response). They represent pre-dispatch decision guidance, not verified causal treatment effects. Recommended interventions require recipient confirmation before dispatch adjustments take effect.
-                </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
-                <!-- Left: Customer Mobile Simulator -->
-                <div class="mobile-simulator-wrapper" style="justify-content: center;">
-                    <div class="phone-mockup">
-                        <div class="phone-notch"></div>
-
-                        <div id="phone-main-content">
-                            <div class="phone-header">
-                                <div class="avatar">📦</div>
-                                <div>
-                                    <div style="font-weight: 600; font-size: 13px;">BRIDGE Delivery Assistant</div>
-                                    <div style="font-size: 10px; color: #a1a1aa;" id="mobile-pkg-tag">Order #PKG-DEMO</div>
-                                </div>
-                            </div>
-
-                            <div class="phone-content">
-                                <h3>Delivery Preference Needed</h3>
-                                <p>Our pre-dispatch intelligence noticed potential delivery difficulty at your scheduled address. Please select your preference to ensure a successful first attempt:</p>
-
-                                <div class="option-cards" id="mobile-options-container">
-                                    <!-- Populated dynamically -->
-                                </div>
-
-                                <button class="phone-confirm-btn" id="mobile-confirm-btn">Confirm Delivery Choice</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right: Proactive Multi-Channel Customer Messaging Preview -->
-                <div class="panel-card messaging-preview-card" style="margin-top: 0;">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>💬</span> Customer Notification Preview
-                        </div>
-                        <span class="disclosure-badge simulation">Preview Only</span>
-                    </div>
-
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-                        Select communication channel to preview automated engagement notification tailored to the active intervention:
-                    </p>
-
-                    <div class="channel-selector">
-                        <button class="channel-chip active" data-channel="SMS">SMS Message</button>
-                        <button class="channel-chip" data-channel="WhatsApp">WhatsApp Alert</button>
-                        <button class="channel-chip" data-channel="Email">Email Template</button>
-                    </div>
-
-                    <div id="messaging-subject-container" style="display: none; margin-bottom: 8px;">
-                        <span style="font-size: 11px; color: var(--text-muted);">SUBJECT:</span>
-                        <div id="messaging-subject-text" style="font-size: 12px; font-weight: 600; color: #f4f4f5; margin-top: 2px;">--</div>
-                    </div>
-
-                    <div class="message-bubble" id="messaging-bubble">
-                        Select an intervention option on the left to preview customer communication...
-                    </div>
-
-                    <div class="message-meta">
-                        <div>Channel Format: <strong id="messaging-channel-badge">SMS</strong></div>
-                        <div>Character Count: <strong id="messaging-char-count">0</strong></div>
-                    </div>
-
-                    <div style="margin-top: 14px; padding: 10px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted);">
-                        <span>🔒</span> Preview mode only. No actual cellular, SMS, or WhatsApp messages are transmitted over live telecommunication networks.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 4: Model Benchmark & Audit -->
-        <div class="tab-panel" id="audit-view" role="tabpanel">
-            <div class="audit-grid">
-                <!-- Left: Model Metrics -->
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>📊</span> Dual Model Benchmark (Test Set: Disjoint Routes)
-                        </div>
-                    </div>
-
-                    <table class="metrics-table">
-                        <thead>
-                            <tr style="text-align: left; color: var(--text-muted); font-size: 12px;">
-                                <th>Metric</th>
-                                <th>Logistic Regression</th>
-                                <th>Random Forest</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Precision-Recall AUC (PR-AUC)</td>
-                                <td id="audit-lr-pr" style="color: #34d399;">0.1139 ★</td>
-                                <td id="audit-rf-pr">0.1114</td>
-                            </tr>
-                            <tr>
-                                <td>ROC-AUC</td>
-                                <td id="audit-lr-roc">0.5611</td>
-                                <td id="audit-rf-roc">0.5510</td>
-                            </tr>
-                            <tr>
-                                <td>Brier Score (Probability Calibration)</td>
-                                <td id="audit-lr-brier">0.2464</td>
-                                <td id="audit-rf-brier">0.2301</td>
-                            </tr>
-                            <tr>
-                                <td>Training Samples (Disjoint Routes)</td>
-                                <td colspan="2" id="audit-train-samples" style="text-align: center;">139,432</td>
-                            </tr>
-                            <tr>
-                                <td>Test Samples (Unseen Routes)</td>
-                                <td colspan="2" id="audit-test-samples" style="text-align: center;">30,469</td>
-                            </tr>
-                            <tr>
-                                <td>Selected Champion</td>
-                                <td colspan="2" id="audit-champion-name" style="text-align: center; color: var(--accent-cyan); font-weight: 700;">Logistic Regression</td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div style="margin-top: 18px; padding: 12px; background: rgba(99, 102, 241, 0.08); border-radius: var(--radius-sm); border: 1px solid rgba(99, 102, 241, 0.2); font-size: 12px;">
-                        <strong style="color: #818cf8;">🔒 Strict Leakage Prevention Audit:</strong>
-                        <ul style="margin-left: 18px; margin-top: 6px; line-height: 1.6; color: var(--text-muted);">
-                            <li><span style="color:#34d399;">✓</span> <code>scan_status</code> strictly omitted (never in X)</li>
-                            <li><span style="color:#34d399;">✓</span> <code>first_attempt_failed</code> target strictly isolated</li>
-                            <li><span style="color:#34d399;">✓</span> Preprocessing fitted on <strong>TRAIN ONLY</strong></li>
-                            <li><span style="color:#34d399;">✓</span> <code>GroupShuffleSplit</code> on <code>route_id</code> prevents route data leakage</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Right: Feature Importances -->
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <div class="panel-title">
-                            <span>🧠</span> Top Feature Drivers of Delivery Risk
-                        </div>
-                    </div>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-                        Relative feature importance ranking derived from the pre-dispatch feature matrix:
-                    </p>
-
-                    <div id="feature-importance-bars">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-            </div>
-        </div>
-
+      </div>
     </div>
 
-    <script src="js/app.js"></script>
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="nav-tab active" data-tab="welcome">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Welcome Overview
+      </button>
+      <button class="nav-tab" data-tab="dispatcher">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Dispatcher Command Center
+        <span class="badge-count" id="high-risk-badge">--</span>
+      </button>
+      <button class="nav-tab" data-tab="interventions">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Customer Interventions
+      </button>
+    </nav>
+
+    <div class="header-right">
+      <div class="engine-badge">
+        <span class="pulse-indicator"></span>
+        <span class="engine-text">Inference Engine: <strong>Active (Logistic Calibrated)</strong></span>
+      </div>
+      <button class="btn-primary" onclick="openRealtimeModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Run Real-Time Prediction
+      </button>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="main-content">
+
+    <!-- ================================================================= -->
+    <!-- VIEW 1: WELCOME DASHBOARD -->
+    <!-- ================================================================= -->
+    <section id="view-welcome" class="view-panel active">
+      <div class="hero-banner">
+        <div class="hero-content">
+          <div class="hero-tag">OPERATIONAL RESILIENCE PLATFORM</div>
+          <h1>Eliminate First-Attempt Delivery Failures Before Vehicle Dispatch.</h1>
+          <p>BRIDGE analyzes CRM behavior, historical premises accessibility, appointment windows, and geographic friction to score parcel failure probability and prescribe proactive customer interventions.</p>
+          <div class="hero-actions">
+            <button class="btn-primary-large" onclick="switchTab('dispatcher')">
+              Open Dispatcher Command Center
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+            <button class="btn-secondary-large" onclick="openRealtimeModal()">
+              Test Single Delivery Scoring
+            </button>
+          </div>
+        </div>
+        <div class="hero-stats-card">
+          <div class="hero-stats-title">Today's Dispatch Health (Fleet Manifest)</div>
+          <div class="stats-mini-grid">
+            <div class="mini-stat">
+              <span class="mini-val" id="kpi-total-parcels">60</span>
+              <span class="mini-lbl">Parcels Scored</span>
+            </div>
+            <div class="mini-stat danger">
+              <span class="mini-val" id="kpi-high-risk-val">--</span>
+              <span class="mini-lbl">High Risk Flagged</span>
+            </div>
+            <div class="mini-stat success">
+              <span class="mini-val" id="kpi-savings-val">$280.20</span>
+              <span class="mini-lbl">Projected Savings</span>
+            </div>
+            <div class="mini-stat warning">
+              <span class="mini-val" id="kpi-cap-rate">20%</span>
+              <span class="mini-lbl">Fleet Capacity Cap</span>
+            </div>
+          </div>
+          <div class="hero-progress-group">
+            <div class="progress-labels">
+              <span>First-Attempt Success Rate Projection</span>
+              <strong id="kpi-projected-rate">96.7% (vs 90.9% baseline)</strong>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: 96.7%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Grid -->
+      <div class="platform-pillars">
+        <div class="pillar-card">
+          <div class="pillar-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <h3>Pre-Dispatch Zero-Leakage ML</h3>
+          <p>44-feature contract operating strictly on variables known prior to driver departure. Eliminates data leakage with Platt calibration.</p>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-icon amber">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h3>20% Fleet Capacity Ceiling</h3>
+          <p>Deterministic Top-K priority ranking guarantees depot operations are never overrun by intervention alerts during peak volumes.</p>
+        </div>
+
+        <div class="pillar-card">
+          <div class="pillar-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <h3>Autonomous Customer Interventions</h3>
+          <p>Prescribes 5 smart self-service options (Locker Hub, Station Hold, Day Shift, Neighbor Drop) with multi-channel SMS & WhatsApp messaging.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- VIEW 2: DISPATCHER COMMAND CENTER -->
+    <!-- ================================================================= -->
+    <section id="view-dispatcher" class="view-panel">
+      <!-- KPI Status Bar -->
+      <div class="kpi-metric-strip">
+        <div class="kpi-box">
+          <span class="kpi-num" id="d-total-count">60</span>
+          <span class="kpi-desc">Total Manifest Orders</span>
+        </div>
+        <div class="kpi-box red">
+          <span class="kpi-num" id="d-high-risk-count">--</span>
+          <span class="kpi-desc">Critical Risk (>14%)</span>
+        </div>
+        <div class="kpi-box yellow">
+          <span class="kpi-num" id="d-med-risk-count">--</span>
+          <span class="kpi-desc">Moderate Risk (11-14%)</span>
+        </div>
+        <div class="kpi-box green">
+          <span class="kpi-num" id="d-low-risk-count">--</span>
+          <span class="kpi-desc">Low Risk (Standard)</span>
+        </div>
+        <div class="kpi-box blue">
+          <span class="kpi-num" id="d-approved-cap-count">--</span>
+          <span class="kpi-desc">Capacity Approved (≤20%)</span>
+        </div>
+      </div>
+
+      <!-- Main Operational Split Layout -->
+      <div class="ops-split-layout">
+        <!-- Left: Orders Manifest Table -->
+        <div class="ops-table-panel">
+          <div class="panel-header">
+            <div class="panel-header-title">
+              <h3>Ingested Pre-Dispatch Manifest</h3>
+              <span class="pill-info">Live Sync • Sample Test Route</span>
+            </div>
+            <div class="filter-controls">
+              <button class="filter-btn active" data-filter="ALL" onclick="setRiskFilter('ALL', this)">All (60)</button>
+              <button class="filter-btn red" data-filter="HIGH" onclick="setRiskFilter('HIGH', this)">High Risk Only</button>
+              <button class="filter-btn yellow" data-filter="MEDIUM" onclick="setRiskFilter('MEDIUM', this)">Medium</button>
+              <button class="filter-btn green" data-filter="LOW" onclick="setRiskFilter('LOW', this)">Low Risk</button>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="shipments-table">
+              <thead>
+                <tr>
+                  <th>Package ID</th>
+                  <th>Depot</th>
+                  <th>Customer Pref</th>
+                  <th>Recipient Presence</th>
+                  <th>Signature</th>
+                  <th>Access</th>
+                  <th>Failure Risk</th>
+                  <th>Capacity Policy</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="shipments-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right: Real-Time Risk Inspector & Root Cause -->
+        <div class="ops-inspector-panel">
+          <div class="panel-header">
+            <h3>Parcel Risk Inspector</h3>
+            <span class="badge-subtle" id="inspector-pkg-id">Select an order</span>
+          </div>
+
+          <div id="inspector-content" class="inspector-empty">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <p>Select any parcel in the manifest queue to inspect its calibrated risk score and root causes.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- VIEW 3: CUSTOMER INTERVENTIONS DASHBOARD -->
+    <!-- ================================================================= -->
+    <section id="view-interventions" class="view-panel">
+      <div class="interventions-layout">
+        <!-- Left Column: High-Risk Parcel Selector -->
+        <div class="interventions-sidebar">
+          <div class="panel-header">
+            <h3>Target Parcels for Intervention</h3>
+            <span class="pill-danger">Requires Action</span>
+          </div>
+          <div class="interventions-pkg-list" id="interventions-pkg-list">
+            <!-- Dynamically populated with High/Med risk items -->
+          </div>
+        </div>
+
+        <!-- Center Column: 5 Smart Prescriptive Options -->
+        <div class="interventions-center">
+          <div class="panel-header">
+            <div>
+              <h3 id="int-panel-heading">Prescriptive Delivery Alternatives</h3>
+              <p class="panel-sub" id="int-panel-sub">Select an alternative to simulate post-intervention success rate.</p>
+            </div>
+            <div id="int-pkg-badge" class="badge-risk-high">Risk: --%</div>
+          </div>
+
+          <div class="intervention-cards-grid" id="intervention-options-container">
+            <!-- Dynamically populated cards -->
+          </div>
+
+          <!-- Action bar -->
+          <div class="intervention-commit-bar">
+            <div>
+              <span class="commit-label">Selected Intervention:</span>
+              <strong id="selected-int-title">None Selected</strong>
+              <span class="reduction-tag" id="selected-int-reduction">0% Reduction</span>
+            </div>
+            <button class="btn-success" id="btn-apply-intervention" onclick="applyCurrentIntervention()" disabled>
+              Confirm & Re-route Shipment
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column: Live Recipient Message Preview -->
+        <div class="interventions-preview">
+          <div class="panel-header">
+            <h3>Recipient Notification Preview</h3>
+            <div class="channel-toggles">
+              <button class="channel-btn active" onclick="setChannel('SMS', this)">SMS</button>
+              <button class="channel-btn" onclick="setChannel('WHATSAPP', this)">WhatsApp</button>
+              <button class="channel-btn" onclick="setChannel('EMAIL', this)">Email</button>
+            </div>
+          </div>
+
+          <div class="phone-mockup">
+            <div class="phone-screen">
+              <div class="phone-header">
+                <span class="phone-time">9:41 AM</span>
+                <span class="phone-carrier">BRIDGE Logistics Alert</span>
+              </div>
+              <div class="message-bubble" id="phone-message-body">
+                Select an order and intervention option to view the simulated message preview.
+              </div>
+              <div class="action-card-preview">
+                <div class="action-preview-title" id="preview-cta-title">Customer Action Required</div>
+                <div class="action-preview-btn">Tap to confirm preference</div>
+              </div>
+            </div>
+          </div>
+          <div class="message-meta-info">
+            <span id="char-count-info">Length: 0 chars</span>
+            <span>Channel: Direct Carrier Gateway</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: REAL-TIME SPOT PREDICTION SYSTEM -->
+  <!-- ================================================================= -->
+  <div class="modal-overlay" id="realtime-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2>Real-Time On-the-Spot Delivery Predictor</h2>
+          <p>Modify parcel parameters and get instant pre-dispatch failure probability scoring.</p>
+        </div>
+        <button class="btn-close" onclick="closeRealtimeModal()">&times;</button>
+      </div>
+
+      <div class="modal-body-split">
+        <form class="realtime-form" id="realtime-form" onsubmit="event.preventDefault(); computeRealtimeScore();">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Fulfillment Depot Station</label>
+              <select id="rt-station" class="form-control">
+                <option value="DLA3">DLA3 - Los Angeles Central</option>
+                <option value="DBO1">DBO1 - Boston Metro</option>
+                <option value="DCH1">DCH1 - Chicago Urban</option>
+                <option value="DSE4">DSE4 - Seattle Hub</option>
+                <option value="DAU1">DAU1 - Austin Regional</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Location Type</label>
+              <select id="rt-loctype" class="form-control">
+                <option value="Apartment">Apartment Multi-Unit</option>
+                <option value="Commercial">Commercial Business</option>
+                <option value="Residential">Residential Single Family</option>
+                <option value="Locker_Hub">Locker Terminal</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Customer Availability Track Record (0.0 - 1.0)</label>
+              <input type="number" id="rt-avail" class="form-control" step="0.05" min="0.1" max="1.0" value="0.35">
+              <span class="field-hint">e.g. 0.35 = recipient home 35% of past deliveries</span>
+            </div>
+            <div class="form-group">
+              <label>Address Access Difficulty (1 easy - 5 gated/complex)</label>
+              <input type="number" id="rt-access" class="form-control" min="1" max="5" value="4">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Mandatory Signature Requirement</label>
+              <select id="rt-sig" class="form-control">
+                <option value="1">Yes (Signature Required)</option>
+                <option value="0">No (Standard Drop-off)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Customer Delivery Preference</label>
+              <select id="rt-pref" class="form-control">
+                <option value="Morning Only">Morning Only (Clashes with afternoon)</option>
+                <option value="Anytime">Anytime Flexible</option>
+                <option value="Evening Only">Evening Only</option>
+                <option value="Leave with Guard">Leave with Guard</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Scheduled Departure Hour</label>
+              <input type="number" id="rt-departure" class="form-control" min="8" max="20" value="16">
+              <span class="field-hint">16:00 = 4:00 PM Afternoon Van Dispatch</span>
+            </div>
+            <div class="form-group">
+              <label>Planned Service Seconds at Stop</label>
+              <input type="number" id="rt-service" class="form-control" min="20" max="600" value="180">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary-large full-width">
+            ⚡ Calculate Real-Time Risk Score On-the-Spot
+          </button>
+        </form>
+
+        <div class="realtime-result-panel" id="realtime-result-panel">
+          <div class="rt-score-card">
+            <div class="rt-gauge" id="rt-gauge-indicator">
+              <span class="rt-percent" id="rt-result-pct">--%</span>
+              <span class="rt-sub">Failure Probability</span>
+            </div>
+            <div class="rt-status-pill" id="rt-result-tier">READY TO SCORE</div>
+            <p id="rt-result-recommendation" class="rt-rec-text">Click calculate to run calibrated logistic inference.</p>
+          </div>
+
+          <div class="rt-factors-box">
+            <h4>Live Model Feature Attributions:</h4>
+            <div id="rt-factors-list" class="rt-factors-list">
+              <div class="rt-factor-empty">Awaiting input parameters...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
 </body>
 </html>

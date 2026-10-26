@@ -1,722 +1,451 @@
-// BRIDGE — Frontend Application Logic (Phase 6)
-// Provides unified Dispatcher Command Center, Route Optimization,
-// Prescriptive Interventions, and Customer Messaging Previews.
+// BRIDGE — Enterprise UI Logic
+// Directly integrates with backend endpoints:
+// - GET /api/shipments/sample
+// - GET /api/dashboard/stats
+// - POST /api/predict
+// - POST /api/intervene/simulate
+// - POST /api/intervene/apply
+// - POST /api/messaging/preview
 
-// Global state
-let allShipments = [];
-let filteredShipments = [];
+let shipments = [];
 let selectedShipment = null;
-let activeFilter = 'ALL';
-let modelMetadata = null;
-let selectedOptionId = null;
-let activeMessagingChannel = 'SMS';
-let activeInterventionsData = [];
+let currentFilter = 'ALL';
+let currentChannel = 'SMS';
+let currentSimulatedOptions = [];
+let selectedOption = null;
 
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-    initApp();
+  setupTabs();
+  loadData();
 });
 
-async function initApp() {
-    setupTabNavigation();
-    setupEventListeners();
-    await loadModelMetadata();
-    await loadDashboardStats();
-    await loadDatabaseStatus();
-    await loadShipments();
-    await loadRouteOptimization();
-}
-
-async function loadDatabaseStatus() {
-    try {
-        const res = await fetch('/api/database/status');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const dbInfo = await res.json();
-        const badge = document.getElementById('db-backend-name');
-        if (badge) {
-            badge.textContent = dbInfo.is_supabase_connected ? 'DB: Supabase Cloud' : 'DB: SQLite (Local)';
-            badge.title = `${dbInfo.backend} | Shipments Stored: ${dbInfo.shipments_stored} | Interventions Logged: ${dbInfo.interventions_logged}`;
-        }
-    } catch (err) {
-        console.error("Error loading database status:", err);
-    }
-}
-
-function setupTabNavigation() {
-    const tabs = document.querySelectorAll('.tab-btn');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => {
-                t.classList.remove('active');
-                t.setAttribute('aria-selected', 'false');
-            });
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-
-            tab.classList.add('active');
-            tab.setAttribute('aria-selected', 'true');
-            const targetId = tab.dataset.target;
-            const targetPanel = document.getElementById(targetId);
-            if (targetPanel) {
-                targetPanel.classList.add('active');
-            }
-
-            // Lazy load route view if selected
-            if (targetId === 'route-view') {
-                loadRouteOptimization();
-            }
-        });
+function setupTabs() {
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+      
+      tab.classList.add('active');
+      const targetId = `view-${tab.dataset.tab}`;
+      const panel = document.getElementById(targetId);
+      if (panel) panel.classList.add('active');
     });
+  });
 }
 
-function setupEventListeners() {
-    // Model switcher
-    const modelSelect = document.getElementById('model-select');
-    if (modelSelect) {
-        modelSelect.addEventListener('change', async (e) => {
-            const newModel = e.target.value;
-            try {
-                const res = await fetch('/api/model/switch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model_name: newModel })
-                });
-                if (res.ok) {
-                    await loadShipments();
-                    await loadDashboardStats();
-                }
-            } catch (err) {
-                console.error("Failed to switch model", err);
-            }
-        });
-    }
-
-    // Filter chips
-    document.querySelectorAll('.filter-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            activeFilter = chip.dataset.filter;
-            applyFilters();
-        });
-    });
-
-    // Search input
-    const searchInput = document.getElementById('shipment-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            applyFilters();
-        });
-    }
-
-    // Route Optimization controls
-    const btnRunOpt = document.getElementById('btn-run-optimization');
-    if (btnRunOpt) {
-        btnRunOpt.addEventListener('click', () => {
-            loadRouteOptimization();
-        });
-    }
-
-    const toggleInterventions = document.getElementById('toggle-route-interventions');
-    if (toggleInterventions) {
-        toggleInterventions.addEventListener('change', () => {
-            loadRouteOptimization();
-        });
-    }
-
-    const toggleCircuit = document.getElementById('toggle-route-circuit');
-    if (toggleCircuit) {
-        toggleCircuit.addEventListener('change', () => {
-            loadRouteOptimization();
-        });
-    }
-
-    // Messaging preview channel chips
-    document.querySelectorAll('.channel-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            document.querySelectorAll('.channel-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            activeMessagingChannel = chip.dataset.channel;
-            if (selectedShipment && selectedOptionId) {
-                loadMessagingPreview(selectedShipment.package_id, selectedOptionId, activeMessagingChannel);
-            }
-        });
-    });
+function switchTab(tabName) {
+  const tab = document.querySelector(`.nav-tab[data-tab="${tabName}"]`);
+  if (tab) tab.click();
 }
 
-async function loadModelMetadata() {
-    try {
-        const res = await fetch('/api/model/metadata');
-        if (!res.ok) return;
-        modelMetadata = await res.json();
-        renderAuditTab(modelMetadata);
-    } catch (err) {
-        console.error("Error loading metadata:", err);
+// ---------------------------------------------------------------------------
+// DATA LOADING
+// ---------------------------------------------------------------------------
+async function loadData() {
+  try {
+    const [statsRes, shipRes] = await Promise.all([
+      fetch('/api/dashboard/stats'),
+      fetch('/api/shipments/sample')
+    ]);
+
+    if (statsRes.ok) {
+      const stats = await statsRes.json();
+      renderStats(stats);
     }
+
+    if (shipRes.ok) {
+      const data = await shipRes.json();
+      shipments = data.shipments || [];
+      renderShipmentsTable(shipments);
+      renderInterventionsSidebar(shipments);
+      if (shipments.length > 0) {
+        selectShipment(shipments[0]);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load live data:", err);
+  }
 }
 
-async function loadDashboardStats() {
-    try {
-        const res = await fetch('/api/dashboard/stats');
-        if (!res.ok) return;
-        const stats = await res.json();
+function renderStats(stats) {
+  const highRisk = stats.high_risk_count ?? 6;
+  const total = stats.total_packages_evaluated ?? 60;
+  const approved = stats.capacity_approved_count ?? 6;
+  const lowCount = stats.low_risk_count ?? 45;
+  const medCount = stats.med_risk_count ?? 9;
 
-        document.getElementById('stat-success-rate').textContent = `${stats.optimized_success_rate}%`;
-        document.getElementById('stat-success-sub').textContent = `+${stats.success_rate_improvement_points}% vs baseline (${stats.baseline_success_rate}%)`;
-
-        document.getElementById('stat-failures-saved').textContent = `-${stats.failed_delivery_reduction_pct}%`;
-        document.getElementById('stat-high-risk').textContent = `${stats.high_risk_count} Packages`;
-        document.getElementById('stat-fuel-saved').textContent = `~${stats.estimated_fuel_savings_pct}%`;
-
-        const aiStatus = document.getElementById('ai-engine-status');
-        if (aiStatus) {
-            aiStatus.textContent = `${stats.active_model} Live`;
-        }
-    } catch (err) {
-        console.error("Error loading stats:", err);
-    }
+  document.getElementById('kpi-total-parcels').textContent = total;
+  document.getElementById('kpi-high-risk-val').textContent = highRisk;
+  document.getElementById('high-risk-badge').textContent = `${highRisk} HIGH`;
+  
+  document.getElementById('d-total-count').textContent = total;
+  document.getElementById('d-high-risk-count').textContent = highRisk;
+  document.getElementById('d-med-risk-count').textContent = medCount;
+  document.getElementById('d-low-risk-count').textContent = lowCount;
+  document.getElementById('d-approved-cap-count').textContent = approved;
 }
 
-async function loadShipments() {
-    try {
-        const res = await fetch('/api/shipments/sample');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        allShipments = data.shipments || [];
-        applyFilters();
+// ---------------------------------------------------------------------------
+// DISPATCHER TABLE & INSPECTOR
+// ---------------------------------------------------------------------------
+function renderShipmentsTable(items) {
+  const tbody = document.getElementById('shipments-tbody');
+  tbody.innerHTML = '';
 
-        // Select first shipment by default
-        if (allShipments.length > 0 && !selectedShipment) {
-            selectShipment(allShipments[0]);
-        }
-    } catch (err) {
-        console.error("Error loading shipments:", err);
+  const filtered = items.filter(s => {
+    if (currentFilter === 'ALL') return true;
+    return (s.prediction?.risk_tier || 'LOW') === currentFilter;
+  });
+
+  filtered.forEach(s => {
+    const tr = document.createElement('tr');
+    const pred = s.prediction || {};
+    const riskTier = pred.risk_tier || 'LOW';
+    const prob = (pred.failure_probability != null) ? (pred.failure_probability * 100).toFixed(1) : '--';
+    const isApproved = pred.capacity_approved;
+
+    if (selectedShipment && selectedShipment.package_id === s.package_id) {
+      tr.classList.add('selected');
     }
-}
 
-function applyFilters() {
-    const search = (document.getElementById('shipment-search')?.value || '').toLowerCase();
+    tr.innerHTML = `
+      <td><span class="pkg-code">${s.package_id ? s.package_id.substring(0, 16) : 'PKG-DEFAULT'}</span></td>
+      <td><strong>${s.station_code || 'DLA3'}</strong></td>
+      <td>${s.customer_delivery_preference || 'Anytime'}</td>
+      <td>${((s.customer_availability_rate || 0.8) * 100).toFixed(0)}%</td>
+      <td>${s.signature_required ? '<span style="color:#F87171;font-weight:700">Req (1)</span>' : 'No (0)'}</td>
+      <td>${s.address_access_difficulty || 1}/5</td>
+      <td><span class="risk-badge ${riskTier}">${prob}% (${riskTier})</span></td>
+      <td><span class="policy-badge ${isApproved ? 'approved' : 'deferred'}">${pred.capacity_status || 'STANDARD'}</span></td>
+      <td>
+        <button class="filter-btn" onclick="event.stopPropagation(); inspectAndJump('${s.package_id}')">
+          Intervene &rarr;
+        </button>
+      </td>
+    `;
 
-    filteredShipments = allShipments.filter(item => {
-        const pred = item.prediction || {};
-        const matchesFilter = (activeFilter === 'ALL') || (pred.risk_tier === activeFilter);
-        const matchesSearch = !search ||
-            (item.package_id && item.package_id.toLowerCase().includes(search)) ||
-            (item.route_id && item.route_id.toLowerCase().includes(search)) ||
-            (item.station_code && item.station_code.toLowerCase().includes(search));
-        return matchesFilter && matchesSearch;
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('#shipments-tbody tr').forEach(r => r.classList.remove('selected'));
+      tr.classList.add('selected');
+      selectShipment(s);
     });
 
-    renderShipmentsTable(filteredShipments);
+    tbody.appendChild(tr);
+  });
 }
 
-function renderShipmentsTable(shipments) {
-    const tbody = document.getElementById('shipments-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    if (shipments.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="state-empty">No matching shipments found in active filter.</td></tr>`;
-        return;
-    }
-
-    shipments.forEach(item => {
-        const tr = document.createElement('tr');
-        if (selectedShipment && selectedShipment.package_id === item.package_id) {
-            tr.classList.add('selected-row');
-        }
-
-        const pred = item.prediction || {};
-        const tier = item.final_risk_tier || pred.risk_tier || 'LOW';
-        const prob = item.final_failure_probability !== undefined ?
-            (item.final_failure_probability * 100).toFixed(1) :
-            (pred.failure_percentage !== undefined ? pred.failure_percentage : (pred.failure_probability * 100).toFixed(1));
-
-        const isIntervened = !!item.applied_intervention;
-        const capStatus = pred.capacity_status || (pred.capacity_approved ? 'APPROVED' : 'NOT_ELIGIBLE');
-
-        let capBadgeHtml = '';
-        if (capStatus === 'APPROVED') {
-            capBadgeHtml = `<span class="capacity-badge approved">APPROVED</span>`;
-        } else if (capStatus === 'DEFERRED_DUE_TO_FLEET_CAPACITY') {
-            capBadgeHtml = `<span class="capacity-badge deferred" title="Deferred due to 20% fleet capacity limit">DEFERRED (CAP)</span>`;
-        } else {
-            capBadgeHtml = `<span style="font-size: 11px; color: var(--text-muted);">STANDARD</span>`;
-        }
-
-        tr.innerHTML = `
-            <td><strong>${item.package_id ? item.package_id.substring(0, 16) : 'PKG-DEMO'}</strong></td>
-            <td>${item.station_code || 'DLA3'}</td>
-            <td>${item.departure_hour ? item.departure_hour + ':00' : '12:00'}</td>
-            <td>${item.customer_availability_rate ? Math.round(item.customer_availability_rate * 100) + '%' : 'N/A'}</td>
-            <td>${capBadgeHtml}</td>
-            <td>
-                <span class="risk-badge ${tier}">
-                    ${tier} (${prob}%)
-                </span>
-                ${isIntervened ? '<span style="font-size:10px; color:#34d399; margin-left:4px;">✓ Optimized</span>' : ''}
-            </td>
-            <td>
-                <button class="btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="event.stopPropagation(); triggerIntervention('${item.package_id}')">
-                    ${tier === 'HIGH' ? 'Intervene ⚡' : 'Inspect'}
-                </button>
-            </td>
-        `;
-
-        tr.addEventListener('click', () => {
-            selectShipment(item);
-        });
-
-        tbody.appendChild(tr);
-    });
+function setRiskFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderShipmentsTable(shipments);
 }
 
-function selectShipment(shipment) {
-    selectedShipment = shipment;
+function selectShipment(s) {
+  selectedShipment = s;
+  const inspector = document.getElementById('inspector-content');
+  const pkgBadge = document.getElementById('inspector-pkg-id');
+  if (pkgBadge) pkgBadge.textContent = s.package_id || 'Active Parcel';
 
-    // Highlight active row
-    const rows = document.querySelectorAll('#shipments-tbody tr');
-    rows.forEach(r => r.classList.remove('selected-row'));
+  const pred = s.prediction || {};
+  const prob = (pred.failure_probability != null) ? (pred.failure_probability * 100).toFixed(1) : '--';
+  const tier = pred.risk_tier || 'LOW';
 
-    // Update Inspector Card
-    const pred = shipment.prediction || {};
-    const tier = shipment.final_risk_tier || pred.risk_tier || 'LOW';
-    const prob = shipment.final_failure_probability !== undefined ?
-        (shipment.final_failure_probability * 100).toFixed(1) :
-        (pred.failure_percentage !== undefined ? pred.failure_percentage : (pred.failure_probability * 100).toFixed(1));
+  const factorsHtml = (pred.risk_factors && pred.risk_factors.length > 0)
+    ? pred.risk_factors.map(f => `
+        <div class="factor-item">
+          <div>
+            <div class="factor-name">${f.factor}</div>
+            <div class="factor-desc">${f.detail || f.pillar}</div>
+          </div>
+          <div class="factor-impact">+${(f.attribution_score != null ? f.attribution_score : f.shap_logit || 0).toFixed(2)} log-odds</div>
+        </div>
+      `).join('')
+    : '<div style="color:var(--text-muted);font-size:0.8rem;">No high friction factors detected. Package is clear for standard departure.</div>';
 
-    const gauge = document.getElementById('inspector-gauge');
-    if (gauge) {
-        gauge.className = `gauge-circle gauge-${tier.toLowerCase()}`;
-        gauge.innerHTML = `${prob}% <span class="gauge-label">${tier}</span>`;
-    }
+  inspector.className = 'inspector-body';
+  inspector.innerHTML = `
+    <div class="inspector-hero">
+      <div>
+        <span style="font-size:0.75rem;text-transform:uppercase;color:var(--text-muted);font-weight:700;">Calculated Failure Risk</span>
+        <div class="score-display">
+          <span class="score-big ${tier}">${prob}%</span>
+          <span class="risk-badge ${tier}">${tier} RISK</span>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <span style="font-size:0.72rem;color:var(--text-muted);">Capacity Policy:</span>
+        <div style="font-weight:700;color:${pred.capacity_approved ? '#60A5FA' : '#F59E0B'}">${pred.capacity_status || 'APPROVED'}</div>
+      </div>
+    </div>
 
-    const pkgIdEl = document.getElementById('inspector-pkg-id');
-    if (pkgIdEl) pkgIdEl.textContent = shipment.package_id || 'PKG-DEMO';
+    <div class="factors-title">SHAP Mathematical Root Causes (Top Attributions)</div>
+    <div class="factors-list">
+      ${factorsHtml}
+    </div>
 
-    const descEl = document.getElementById('inspector-status-desc');
-    if (descEl) descEl.textContent = shipment.status || pred.recommended_action || "Standard delivery dispatch.";
-
-    // Render Risk Factors & SHAP Attributions
-    const factorsList = document.getElementById('inspector-factors');
-    if (factorsList) {
-        factorsList.innerHTML = '';
-        if (pred.risk_factors && pred.risk_factors.length > 0) {
-            pred.risk_factors.forEach(f => {
-                const div = document.createElement('div');
-                div.className = `factor-item severity-${f.severity || 'low'}`;
-                const sharePct = f.risk_driver_share !== undefined ? ` • ${Math.round(f.risk_driver_share * 100)}% share` : '';
-                const logitVal = f.shap_logit !== undefined ? f.shap_logit : f.attribution_delta_logit;
-                const deltaLogit = logitVal !== undefined ? ` • &Delta;logit: +${logitVal.toFixed(3)}` : '';
-
-                div.innerHTML = `
-                    <div>
-                        <div class="factor-title">${f.factor}</div>
-                        <div class="factor-desc">${f.detail}</div>
-                        <div style="font-size: 10px; color: #a5b4fc; font-family: monospace; margin-top: 2px;">
-                            ${deltaLogit}${sharePct}
-                        </div>
-                    </div>
-                `;
-                factorsList.appendChild(div);
-            });
-        } else {
-            factorsList.innerHTML = `<div style="color: #34d399; font-size: 12px; padding: 6px;">✓ No high-severity risk factors identified.</div>`;
-        }
-    }
-
-    // Specifications
-    const specCustPref = document.getElementById('spec-customer-pref');
-    if (specCustPref) specCustPref.textContent = shipment.customer_delivery_preference || 'Anytime';
-
-    const specSig = document.getElementById('spec-signature');
-    if (specSig) specSig.textContent = shipment.signature_required === 1 ? 'Yes (Mandatory)' : 'No (Standard Dropoff)';
-
-    const specAccess = document.getElementById('spec-access-diff');
-    if (specAccess) specAccess.textContent = `Level ${shipment.address_access_difficulty || 1} / 5`;
-
-    const specPrior = document.getElementById('spec-prior-fails');
-    if (specPrior) specPrior.textContent = `${shipment.customer_previous_failed_attempts || 0} failed attempts`;
-
-    const specCap = document.getElementById('spec-capacity-status');
-    if (specCap) {
-        specCap.textContent = pred.capacity_status || (pred.capacity_approved ? 'APPROVED' : 'STANDARD');
-        specCap.style.color = pred.capacity_approved ? '#34d399' : '#fbbf24';
-    }
-
-    const specRank = document.getElementById('spec-priority-rank');
-    if (specRank) specRank.textContent = pred.operational_priority_rank ? `#${pred.operational_priority_rank} in batch` : 'N/A';
-
-    // Intervene button in inspector
-    const btn = document.getElementById('inspector-intervene-btn');
-    if (btn) {
-        btn.onclick = () => triggerIntervention(shipment.package_id);
-    }
+    <div class="inspector-cta">
+      <button class="btn-primary full-width" onclick="inspectAndJump('${s.package_id}')">
+        ⚡ Open Customer Interventions for ${s.package_id ? s.package_id.substring(0, 14) : 'Parcel'} &rarr;
+      </button>
+    </div>
+  `;
 }
 
-async function triggerIntervention(packageId) {
-    const shipment = allShipments.find(s => s.package_id === packageId) || selectedShipment;
-    if (!shipment) return;
-
-    selectShipment(shipment);
-
-    // Switch to Customer tab
-    document.querySelector('.tab-btn[data-target="customer-view"]').click();
-
-    // Load simulated options
-    const optionsContainer = document.getElementById('mobile-options-container');
-    if (optionsContainer) {
-        optionsContainer.innerHTML = '<div style="text-align:center; padding: 20px; color:#a1a1aa;"><div class="spinner"></div><div style="margin-top:8px;">Evaluating prescriptive guidance...</div></div>';
-    }
-
-    try {
-        const res = await fetch('/api/intervene/simulate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ shipment: shipment })
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        activeInterventionsData = data.intervention_options || [];
-        renderCustomerMobilePortal(shipment, activeInterventionsData);
-
-        // Preload messaging preview for top recommended option
-        const recOpt = activeInterventionsData.find(o => o.recommended) || activeInterventionsData[0];
-        if (recOpt) {
-            selectedOptionId = recOpt.id;
-            loadMessagingPreview(shipment.package_id, recOpt.id, activeMessagingChannel);
-        }
-    } catch (err) {
-        console.error("Error simulating intervention:", err);
-        if (optionsContainer) {
-            optionsContainer.innerHTML = `<div style="color:#f87171; padding:12px; font-size:12px;">Failed to simulate interventions: ${err.message}</div>`;
-        }
-    }
+function inspectAndJump(pkgId) {
+  const found = shipments.find(s => s.package_id === pkgId);
+  if (found) {
+    selectedShipment = found;
+    switchTab('interventions');
+    highlightInterventionPackage(pkgId);
+    simulateOptionsForShipment(found);
+  }
 }
 
-function renderCustomerMobilePortal(shipment, options) {
-    const container = document.getElementById('mobile-options-container');
-    if (!container) return;
-    container.innerHTML = '';
-    selectedOptionId = null;
+// ---------------------------------------------------------------------------
+// VIEW 3: CUSTOMER INTERVENTIONS & MESSAGING
+// ---------------------------------------------------------------------------
+function renderInterventionsSidebar(items) {
+  const list = document.getElementById('interventions-pkg-list');
+  list.innerHTML = '';
 
-    const pkgTag = document.getElementById('mobile-pkg-tag');
-    if (pkgTag) {
-        pkgTag.textContent = `Order #${shipment.package_id ? shipment.package_id.substring(0, 12) : 'DELIVERY'}`;
-    }
+  const priorityItems = items.filter(s => {
+    const tier = s.prediction?.risk_tier;
+    return tier === 'HIGH' || tier === 'MEDIUM';
+  });
 
-    options.forEach(opt => {
-        const card = document.createElement('div');
-        card.className = `option-card ${opt.recommended ? 'recommended' : ''}`;
-        card.dataset.optionId = opt.id;
+  priorityItems.forEach((s, idx) => {
+    const card = document.createElement('div');
+    card.className = `int-pkg-card ${idx === 0 ? 'active' : ''}`;
+    card.dataset.id = s.package_id;
+    const prob = ((s.prediction?.failure_probability || 0) * 100).toFixed(1);
+    const tier = s.prediction?.risk_tier || 'HIGH';
 
-        // Rule-based badge for station hold vs simulation
-        let ruleBadgeHtml = '';
-        if (opt.id === 'hold_pickup') {
-            ruleBadgeHtml = `<span class="disclosure-badge heuristic" style="margin-left: 6px;">Rule-Based (1.5%)</span>`;
-        }
+    card.innerHTML = `
+      <div class="int-pkg-head">
+        <strong style="font-family:var(--font-mono);font-size:0.8rem;color:#93C5FD;">${s.package_id ? s.package_id.substring(0, 16) : 'PKG'}</strong>
+        <span class="risk-badge ${tier}">${prob}%</span>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);display:flex;justify-content:space-between;">
+        <span>${s.location_type || 'Apartment'}</span>
+        <span>Dwell: ${s.planned_service_time_seconds || 180}s</span>
+      </div>
+    `;
 
-        const utilityPill = opt.utility_score !== undefined ?
-            `<span style="font-size: 10px; color: #a5b4fc; background: rgba(99,102,241,0.15); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Utility: ${opt.utility_score}</span>` : '';
-
-        card.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <div style="display: flex; align-items: center;">
-                    ${opt.recommended ? '<span class="option-badge-rec">Recommended</span>' : ''}
-                    ${ruleBadgeHtml}
-                </div>
-                ${utilityPill}
-            </div>
-            <div class="option-title">${opt.title}</div>
-            <div class="option-desc">${opt.description}</div>
-            <div class="option-risk-drop">📉 Projected Risk: ${(opt.original_prob * 100).toFixed(1)}% ➔ ${(opt.new_prob * 100).toFixed(1)}% (${opt.risk_reduction_pct}% reduction)</div>
-        `;
-
-        card.addEventListener('click', () => {
-            document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-            selectedOptionId = opt.id;
-            loadMessagingPreview(shipment.package_id, opt.id, activeMessagingChannel);
-        });
-
-        // Auto select recommended option
-        if (opt.recommended && !selectedOptionId) {
-            card.classList.add('selected');
-            selectedOptionId = opt.id;
-        }
-
-        container.appendChild(card);
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.int-pkg-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      selectedShipment = s;
+      simulateOptionsForShipment(s);
     });
 
-    const confirmBtn = document.getElementById('mobile-confirm-btn');
-    if (confirmBtn) {
-        confirmBtn.style.display = 'block';
-        confirmBtn.onclick = async () => {
-            if (!selectedOptionId) {
-                alert('Please select one of the delivery preferences.');
-                return;
-            }
-            await applyCustomerPreference(shipment.package_id, selectedOptionId);
-        };
-    }
+    list.appendChild(card);
+  });
+
+  if (priorityItems.length > 0) {
+    selectedShipment = priorityItems[0];
+    simulateOptionsForShipment(priorityItems[0]);
+  }
 }
 
-async function loadMessagingPreview(packageId, interventionId, channel) {
-    const bubble = document.getElementById('messaging-bubble');
-    const subjContainer = document.getElementById('messaging-subject-container');
-    const subjText = document.getElementById('messaging-subject-text');
-    const charCountEl = document.getElementById('messaging-char-count');
-    const channelBadge = document.getElementById('messaging-channel-badge');
-
-    if (!bubble) return;
-    bubble.innerHTML = '<div class="spinner"></div> Rendering preview...';
-
-    try {
-        const res = await fetch('/api/messaging/preview', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                package_id: packageId || 'PKG-DEMO',
-                intervention_id: interventionId || 'access_point',
-                channel: channel || 'SMS'
-            })
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        bubble.textContent = data.content || 'Preview unavailable.';
-        if (channelBadge) channelBadge.textContent = data.channel;
-        if (charCountEl) charCountEl.textContent = data.char_count || 0;
-
-        if (data.subject && subjContainer && subjText) {
-            subjContainer.style.display = 'block';
-            subjText.textContent = data.subject;
-        } else if (subjContainer) {
-            subjContainer.style.display = 'none';
-        }
-    } catch (err) {
-        console.error("Error loading messaging preview:", err);
-        bubble.textContent = `Preview error: ${err.message}`;
-    }
+function highlightInterventionPackage(pkgId) {
+  document.querySelectorAll('.int-pkg-card').forEach(c => {
+    if (c.dataset.id === pkgId) c.classList.add('active');
+    else c.classList.remove('active');
+  });
 }
 
-async function applyCustomerPreference(packageId, interventionId) {
-    try {
-        const res = await fetch('/api/intervene/apply', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ package_id: packageId, intervention_id: interventionId })
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const result = await res.json();
+async function simulateOptionsForShipment(s) {
+  if (!s) return;
+  const badge = document.getElementById('int-pkg-badge');
+  const prob = ((s.prediction?.failure_probability || 0.15) * 100).toFixed(1);
+  if (badge) {
+    badge.textContent = `Baseline Risk: ${prob}%`;
+    badge.className = `badge-risk-${s.prediction?.risk_tier || 'HIGH'}`;
+  }
 
-        // Show success screen in phone
-        const contentDiv = document.getElementById('phone-main-content');
-        if (contentDiv) {
-            contentDiv.innerHTML = `
-                <div class="phone-success">
-                    <div class="phone-success-icon">✓</div>
-                    <h3>Delivery Preference Confirmed!</h3>
-                    <p style="margin-top: 10px;">${result.message}</p>
-                    <div style="background: #18181b; padding: 14px; border-radius: 12px; margin: 16px 0; font-size: 12px; border: 1px solid rgba(255,255,255,0.08);">
-                        <div style="color: #34d399; font-weight: 600; margin-bottom: 4px;">Optimized Dispatch Plan:</div>
-                        <div>Failure probability lowered to <strong>${(result.updated_shipment.final_failure_probability * 100).toFixed(1)}%</strong></div>
-                        <div style="color: #a1a1aa; margin-top: 4px;">Driver schedule updated automatically.</div>
-                    </div>
-                    <button class="btn-primary" style="width: 100%; justify-content: center;" onclick="resetCustomerPortal()">
-                        Return to Dispatcher View
-                    </button>
-                </div>
-            `;
-        }
+  try {
+    const res = await fetch('/api/intervene/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shipment: s })
+    });
 
-        // Refresh stats & table
-        await loadDashboardStats();
-        await loadShipments();
-    } catch (err) {
-        console.error("Failed to apply preference:", err);
-        alert(`Failed to apply preference: ${err.message}`);
+    if (res.ok) {
+      const data = await res.json();
+      currentSimulatedOptions = data.intervention_options || [];
+      renderInterventionCards(currentSimulatedOptions);
+      if (currentSimulatedOptions.length > 0) {
+        selectOption(currentSimulatedOptions[0]);
+      }
     }
+  } catch (err) {
+    console.error("Simulation request failed:", err);
+  }
 }
 
-function resetCustomerPortal() {
-    const phoneContainer = document.getElementById('phone-main-content');
-    if (phoneContainer) {
-        phoneContainer.innerHTML = `
-            <div class="phone-header">
-                <div class="avatar">📦</div>
-                <div>
-                    <div style="font-weight: 600; font-size: 13px;">BRIDGE Delivery Assistant</div>
-                    <div style="font-size: 10px; color: #a1a1aa;" id="mobile-pkg-tag">Order #PKG-DEMO</div>
-                </div>
-            </div>
-            <div class="phone-content">
-                <h3>Delivery Update Needed</h3>
-                <p>Our pre-dispatch intelligence indicates potential delivery difficulty at your scheduled address. Please select your preference:</p>
-                <div class="option-cards" id="mobile-options-container">
-                    <!-- Dynamically rendered -->
-                </div>
-                <button class="phone-confirm-btn" id="mobile-confirm-btn">Confirm Delivery Choice</button>
-            </div>
-        `;
-    }
-    document.querySelector('.tab-btn[data-target="dispatcher-view"]').click();
+function renderInterventionCards(options) {
+  const container = document.getElementById('intervention-options-container');
+  container.innerHTML = '';
+
+  options.forEach((opt, idx) => {
+    const div = document.createElement('div');
+    div.className = `option-card ${idx === 0 ? 'selected' : ''}`;
+    div.dataset.id = opt.id;
+
+    div.innerHTML = `
+      <div class="option-left">
+        <div class="option-title">${opt.title}</div>
+        <div class="option-desc">${opt.description}</div>
+      </div>
+      <div class="option-stats">
+        <div class="option-new-prob">${(opt.new_prob * 100).toFixed(1)}%</div>
+        <div class="option-drop">&darr; ${opt.risk_reduction_pct}% Risk Drop</div>
+      </div>
+    `;
+
+    div.addEventListener('click', () => {
+      document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+      div.classList.add('selected');
+      selectOption(opt);
+    });
+
+    container.appendChild(div);
+  });
 }
 
-// -----------------------------------------------------------------------------
-// Route Optimization API Integration
-// -----------------------------------------------------------------------------
-async function loadRouteOptimization() {
-    const routeSelect = document.getElementById('route-select');
-    const routeId = routeSelect ? routeSelect.value : 'RouteID_00143bdd-0a6b-49ec-bb35-36593d303e77';
-    const applyInt = document.getElementById('toggle-route-interventions')?.checked ?? true;
-    const returnToDepot = document.getElementById('toggle-route-circuit')?.checked ?? true;
-
-    const statusPill = document.getElementById('route-status-pill');
-    if (statusPill) statusPill.textContent = 'OPTIMIZING...';
-
-    try {
-        const res = await fetch('/api/route/optimize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                route_id: routeId,
-                apply_interventions: applyInt,
-                return_to_depot: returnToDepot
-            })
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        renderRouteOptimization(data);
-    } catch (err) {
-        console.error("Error optimizing route:", err);
-        if (statusPill) statusPill.textContent = 'ERROR';
-    }
+function selectOption(opt) {
+  selectedOption = opt;
+  document.getElementById('selected-int-title').textContent = opt.title;
+  document.getElementById('selected-int-reduction').textContent = `${opt.risk_reduction_pct}% Failure Reduction`;
+  document.getElementById('btn-apply-intervention').disabled = false;
+  
+  updateMessagePreview(opt);
 }
 
-function renderRouteOptimization(data) {
-    if (!data) return;
-
-    // Macro Sequence Savings Card
-    const origKm = document.getElementById('route-orig-km');
-    if (origKm) origKm.textContent = data.original_distance_km ? data.original_distance_km.toFixed(2) : '--';
-
-    const optKm = document.getElementById('route-opt-km');
-    if (optKm) optKm.textContent = data.optimized_distance_km ? data.optimized_distance_km.toFixed(2) : '--';
-
-    const macroSavingsEl = document.getElementById('route-macro-savings-pct');
-    if (macroSavingsEl) macroSavingsEl.textContent = `${data.distance_savings_pct}%`;
-
-    // Metrics Breakdown Card
-    const tourDistEl = document.getElementById('metric-tour-dist');
-    if (tourDistEl) tourDistEl.textContent = `${data.optimized_distance_km.toFixed(2)} km`;
-
-    const distSavedEl = document.getElementById('metric-dist-saved');
-    if (distSavedEl) distSavedEl.textContent = `${data.distance_savings_km.toFixed(2)} km`;
-
-    const stopsCountEl = document.getElementById('metric-stops-count');
-    if (stopsCountEl) stopsCountEl.textContent = `${data.stops_count} Stops`;
-
-    const tourDurationEl = document.getElementById('metric-tour-duration');
-    if (tourDurationEl) tourDurationEl.textContent = `${data.estimated_duration_minutes} min`;
-
-    const statusPill = document.getElementById('route-status-pill');
-    if (statusPill) {
-        statusPill.textContent = data.interventions_applied ? 'INTERVENTIONS APPLIED' : 'SPATIAL 2-OPT';
-        statusPill.className = `capacity-badge ${data.savings_target_met ? 'approved' : 'deferred'}`;
-    }
-
-    const targetStatus = document.getElementById('metric-target-status');
-    if (targetStatus) {
-        targetStatus.textContent = data.savings_target_met ? "MET (≥ 12.0%)" : "Target Not Met";
-        targetStatus.style.color = data.savings_target_met ? "#34d399" : "#fbbf24";
-    }
-
-    // Stop Sequence Table
-    const seqTbody = document.getElementById('sequence-tbody');
-    if (seqTbody && data.stops) {
-        seqTbody.innerHTML = '';
-        data.stops.forEach((s, idx) => {
-            const tr = document.createElement('tr');
-            const isLocker = s.stop_id === 'HUB_LOCKER_CONSOLIDATED';
-            const stopType = isLocker ?
-                '<span class="stop-locker-hub">HUB Smart Locker (PUDO)</span>' :
-                'Standard Residential Dropoff';
-
-            tr.innerHTML = `
-                <td><span class="stop-step-pill">${idx + 1}</span></td>
-                <td><strong>${s.stop_id}</strong></td>
-                <td style="font-family: monospace; color: var(--text-muted);">${s.latitude.toFixed(4)}, ${s.longitude.toFixed(4)}</td>
-                <td>${s.package_count || (s.package_ids ? s.package_ids.length : 1)}</td>
-                <td>${stopType}</td>
-            `;
-            seqTbody.appendChild(tr);
-        });
-    }
+function setChannel(channel, btn) {
+  currentChannel = channel;
+  document.querySelectorAll('.channel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (selectedOption) {
+    updateMessagePreview(selectedOption);
+  }
 }
 
-// -----------------------------------------------------------------------------
-// Model Benchmark & Technical Audit Tab
-// -----------------------------------------------------------------------------
-function renderAuditTab(meta) {
-    if (!meta) return;
+async function updateMessagePreview(opt) {
+  if (!selectedShipment || !opt) return;
 
-    // Champion model
-    const champEl = document.getElementById('audit-champion-name');
-    if (champEl) champEl.textContent = meta.champion_model || 'Logistic Regression';
+  try {
+    const res = await fetch('/api/messaging/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        package_id: selectedShipment.package_id || 'PKG-DEMO',
+        intervention_id: opt.id,
+        channel: currentChannel,
+        recipient_name: "Customer"
+      })
+    });
 
-    const trainEl = document.getElementById('audit-train-samples');
-    if (trainEl) trainEl.textContent = `${meta.train_rows ? meta.train_rows.toLocaleString() : '139,432'} rows`;
-
-    const testEl = document.getElementById('audit-test-samples');
-    if (testEl) testEl.textContent = `${meta.test_rows ? meta.test_rows.toLocaleString() : '30,469'} rows`;
-
-    // Comparison metrics
-    const results = meta.comparison_results;
-    if (results) {
-        const lrTest = results["Logistic Regression"]?.test_metrics;
-        const rfTest = results["Random Forest"]?.test_metrics;
-
-        if (lrTest) {
-            const pr = document.getElementById('audit-lr-pr');
-            if (pr) pr.textContent = `${lrTest.pr_auc} ★`;
-            const roc = document.getElementById('audit-lr-roc');
-            if (roc) roc.textContent = lrTest.roc_auc;
-            const brier = document.getElementById('audit-lr-brier');
-            if (brier) brier.textContent = lrTest.brier_score;
-        }
-
-        if (rfTest) {
-            const pr = document.getElementById('audit-rf-pr');
-            if (pr) pr.textContent = rfTest.pr_auc;
-            const roc = document.getElementById('audit-rf-roc');
-            if (roc) roc.textContent = rfTest.roc_auc;
-            const brier = document.getElementById('audit-rf-brier');
-            if (brier) brier.textContent = rfTest.brier_score;
-        }
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('phone-message-body').textContent = data.content || '';
+      document.getElementById('preview-cta-title').textContent = opt.title;
+      document.getElementById('char-count-info').textContent = `Length: ${data.char_count || 0} chars`;
     }
+  } catch (err) {
+    console.error("Preview fetch failed:", err);
+  }
+}
 
-    // Top feature importances
-    const featureContainer = document.getElementById('feature-importance-bars');
-    if (featureContainer && meta.top_features) {
-        featureContainer.innerHTML = '';
-        const top10 = Object.entries(meta.top_features).slice(0, 10);
-        const maxVal = Math.max(...top10.map(([_, v]) => v)) || 1.0;
+async function applyCurrentIntervention() {
+  if (!selectedShipment || !selectedOption) return;
+  const btn = document.getElementById('btn-apply-intervention');
+  btn.textContent = "Updating Delivery Plan...";
+  btn.disabled = true;
 
-        top10.forEach(([feat, val]) => {
-            const pct = Math.round((val / maxVal) * 100);
-            const div = document.createElement('div');
-            div.className = 'feature-bar-wrapper';
-            div.innerHTML = `
-                <div class="feature-bar-label">
-                    <span>${feat}</span>
-                    <span>${val}</span>
-                </div>
-                <div class="feature-bar-bg">
-                    <div class="feature-bar-fill" style="width: ${pct}%"></div>
-                </div>
-            `;
-            featureContainer.appendChild(div);
-        });
+  try {
+    const res = await fetch('/api/intervene/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        package_id: selectedShipment.package_id,
+        intervention_id: selectedOption.id
+      })
+    });
+
+    if (res.ok) {
+      btn.textContent = "✓ Intervention Confirmed!";
+      setTimeout(() => {
+        btn.textContent = "Confirm & Re-route Shipment";
+        btn.disabled = false;
+        loadData();
+      }, 2000);
     }
+  } catch (err) {
+    btn.textContent = "Error applying";
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// REAL-TIME SPOT SCORING MODAL
+// ---------------------------------------------------------------------------
+function openRealtimeModal() {
+  document.getElementById('realtime-modal').classList.add('active');
+}
+function closeRealtimeModal() {
+  document.getElementById('realtime-modal').classList.remove('active');
+}
+
+async function computeRealtimeScore() {
+  const payload = {
+    station_code: document.getElementById('rt-station').value,
+    location_type: document.getElementById('rt-loctype').value,
+    customer_availability_rate: parseFloat(document.getElementById('rt-avail').value),
+    address_access_difficulty: parseInt(document.getElementById('rt-access').value),
+    signature_required: parseInt(document.getElementById('rt-sig').value),
+    customer_delivery_preference: document.getElementById('rt-pref').value,
+    departure_hour: parseInt(document.getElementById('rt-departure').value),
+    planned_service_time_seconds: parseFloat(document.getElementById('rt-service').value),
+    latitude: 34.05,
+    longitude: -118.25
+  };
+
+  try {
+    const res = await fetch('/api/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shipment: payload })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const prob = (data.failure_probability * 100).toFixed(1);
+      const tier = data.risk_tier || 'LOW';
+
+      document.getElementById('rt-result-pct').textContent = `${prob}%`;
+      const tierElem = document.getElementById('rt-result-tier');
+      tierElem.textContent = `${tier} RISK LEVEL`;
+      tierElem.style.background = tier === 'HIGH' ? 'var(--danger-bg)' : (tier === 'MEDIUM' ? 'var(--warning-bg)' : 'var(--success-bg)');
+      tierElem.style.color = tier === 'HIGH' ? '#F87171' : (tier === 'MEDIUM' ? '#FBBF24' : '#34D399');
+
+      document.getElementById('rt-result-recommendation').textContent = data.recommended_action || '';
+
+      const list = document.getElementById('rt-factors-list');
+      if (data.risk_factors && data.risk_factors.length > 0) {
+        list.innerHTML = data.risk_factors.map(f => `
+          <div class="rt-factor-pill">
+            <span><strong>${f.factor}</strong> (${f.detail})</span>
+            <span style="color:#F87171;font-weight:700;">+${(f.attribution_score || 0).toFixed(2)}</span>
+          </div>
+        `).join('');
+      } else {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:0.75rem;">Clear for standard departure (No severe risk drivers).</div>';
+      }
+    }
+  } catch (err) {
+    console.error("Realtime scoring failed:", err);
+  }
 }
