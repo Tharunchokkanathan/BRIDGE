@@ -1,1 +1,1 @@
-from index import app
+from app.server import app
